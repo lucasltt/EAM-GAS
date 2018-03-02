@@ -5,6 +5,14 @@ create or replace package EAM_EPM is
   -- Author  : Lucas Turchet
   -- Created : 23/02/18
   -- Purpose : Disponibilización de Activos para Integración con EAM GAS
+  
+  
+  -- Creación
+  -- Version : 1.1
+  -- Author  : Lucas Turchet
+  -- Created : 02/03/18
+  -- Adicion de Reglas de Activos Retirados
+  -- Adicion de Reglas de Actualización de Fechas
 
   -- Busca los elementos de un Número de Tramo Específico
   function EAM_TRACETRAMOESPECIFICO(nrTramo IN NUMBER) return EAM_TRACE_TABLE;
@@ -564,13 +572,13 @@ create or replace package body EAM_EPM is
   
   begin
   
-    delete from eam_activos;
+    delete from eam_activos_temp;
     commit;
   
     delete from eam_errors;
     commit;
   
-    delete from eam_ubicacion;
+    delete from eam_ubicacion_temp;
     commit;
   
     --Carga Configuración
@@ -686,17 +694,15 @@ create or replace package body EAM_EPM is
               from gtub_prm_at
              where tipo = 'MATRIZ'
                and g3e_fid = elTrace.g3e_fid;
-            insert into eam_activos
+            insert into eam_activos_temp
             values
               (vClaseTramosMatriz,
                elTrace.g3e_fid,
                elTrace.g3e_fno,
-               (select g3e_username
-                  from g3e_feature
-                 where g3e_fno = eltrace.g3e_fno),
                codigo,
                vUbicacionMatriz,
                6,
+               null,
                null,
                null,
                elTrace.grupo,
@@ -737,14 +743,11 @@ create or replace package body EAM_EPM is
            where g3e_fid = elTrace.g3e_fid
              and g3e_fno = elTrace.g3e_fno;
         
-          insert into eam_activos
+          insert into eam_activos_temp
           values
             (vClaseEstacionSeccionamiento,
              elTrace.g3e_fid,
              elTrace.g3e_fno,
-             (select g3e_username
-                from g3e_feature
-               where g3e_fno = eltrace.g3e_fno),
              codigo || '-6',
              vUbicacionEstSeccionamiento,
              6,
@@ -752,38 +755,35 @@ create or replace package body EAM_EPM is
              null,
              null,
              null,
+             null,
              sysdate);
         
-          insert into eam_activos
+          insert into eam_activos_temp
           values
             (vClaseInstrumentacion,
              elTrace.g3e_fid,
              elTrace.g3e_fno,
-             (select g3e_username
-                from g3e_feature
-               where g3e_fno = eltrace.g3e_fno),
              null,
              vUbicacionEstSeccionamiento,
              7,
              elTrace.g3e_fid,
              codigo || '-6',
+             null,
              null,
              null,
              sysdate);
         
-          insert into eam_activos
+          insert into eam_activos_temp
           values
             (vClaseObraCivilSeccionamiento,
              elTrace.g3e_fid,
              elTrace.g3e_fno,
-             (select g3e_username
-                from g3e_feature
-               where g3e_fno = eltrace.g3e_fno),
              null,
              vUbicacionEstSeccionamiento,
              7,
              elTrace.g3e_fid,
              codigo || '-6',
+             null,
              null,
              null,
              sysdate);
@@ -808,19 +808,17 @@ create or replace package body EAM_EPM is
                where g3e_fid = bypass.g3e_fid
                  and g3e_fno = 14200;
             
-              insert into eam_activos
+              insert into eam_activos_temp
               values
                 (vClaseByPass,
                  bypass.g3e_fid,
                  bypass.g3e_fno,
-                 (select g3e_username
-                    from g3e_feature
-                   where g3e_fno = eltrace.g3e_fno),
                  null,
                  vUbicacionEstSeccionamiento,
                  7,
                  elTrace.g3e_fid,
                  codigo_padre || '-6',
+                 null,
                  null,
                  null,
                  sysdate);
@@ -840,16 +838,16 @@ create or replace package body EAM_EPM is
   
     --Linea Matriz, Obra Civil
     for clp_lm_oc in lp_lm_oc loop
-      insert into eam_activos
+      insert into eam_activos_temp
       values
         (vClaseObraCivilMatriz,
          clp_lm_oc.fid_protec,
          clp_lm_oc.fno_protec,
-         'Protección Mecanica',
          null,
          vUbicacionMatriz,
          6,
          clp_lm_oc.tub_fid,
+         null,
          null,
          0,
          0,
@@ -1005,17 +1003,15 @@ create or replace package body EAM_EPM is
           
             codigo := 'RML-' || vRamalFid;
           
-            insert into eam_activos
+            insert into eam_activos_temp
             values
               (vClaseRamal,
                vRamalFid,
                vRamalFno,
-               (select g3e_username
-                  from g3e_feature
-                 where g3e_fno = vRamalFno),
                codigo,
                vUbicacionRamal,
                6,
+               null,
                null,
                null,
                0,
@@ -1023,35 +1019,31 @@ create or replace package body EAM_EPM is
                sysdate);
           
             --Aprovechar y generar la ubicación del circuito
-            insert into eam_ubicacion
+            insert into eam_ubicacion_temp
             values
               (vClaseCircuito,
                vRamalFid,
                vRamalFno,
-               (select g3e_username
-                  from g3e_feature
-                 where g3e_fno = vRamalFno),
                cRamal.Tipo_Nombre,
                'CIR-' || cRamal.Tipo_Nombre,
                5,
                vSuperiorCircuito,
+               null,
                sysdate);
             commit;
           end if;
         
-          insert into eam_activos
+          insert into eam_activos_temp
           values
             (vClaseTuberiaRamal,
              elTrace.g3e_fid,
              elTrace.g3e_fno,
-             (select g3e_username
-                from g3e_feature
-               where g3e_fno = elTrace.g3e_fno),
              null,
              vUbicacionRamal,
              7,
              vRamalFid,
              codigo,
+             null,
              0,
              0,
              sysdate);
@@ -1063,16 +1055,16 @@ create or replace package body EAM_EPM is
   
     --Ramal, Obra Civil
     for clp_rm_oc in lp_rm_oc loop
-      insert into eam_activos
+      insert into eam_activos_temp
       values
         (vClaseObraCivilRamal,
          clp_rm_oc.fid_protec,
          clp_rm_oc.fno_protec,
-         'Protección Mecanica',
          'RML-' || clp_rm_oc.ramal,
          vUbicacionRamal,
          7,
          clp_rm_oc.tub_fid,
+         null,
          null,
          0,
          0,
@@ -1081,18 +1073,18 @@ create or replace package body EAM_EPM is
     commit;
   
     --Linea Secundaria, Activos
-    for circuito in (select * from eam_ubicacion) loop
+    for circuito in (select * from eam_ubicacion_temp) loop
     
       --Arteria
-      insert into eam_activos
+      insert into eam_activos_temp
       values
         (vClaseArteria,
          circuito.g3e_fid,
          circuito.g3e_fno,
-         circuito.activo_nombre,
          'ART-' || circuito.codigo,
          circuito.codigo_ubicacion,
          6,
+         null,
          null,
          null,
          0,
@@ -1104,19 +1096,17 @@ create or replace package body EAM_EPM is
                        from cconectividad_g
                       where g3e_fno = 14700
                         and nombre_circuito = circuito.codigo) loop
-        insert into eam_activos
+        insert into eam_activos_temp
         values
-          ('POLIVALVULA ARTERIA',
+          (vClasePolivalvulaArteria,
            activo.g3e_fid,
            activo.g3e_fno,
-           (select g3e_username
-              from g3e_feature
-             where g3e_fno = activo.g3e_fno),
            null,
            circuito.codigo_ubicacion,
            7,
            circuito.g3e_fid,
            'ART-' || circuito.codigo,
+           null,
            0,
            0,
            sysdate);
@@ -1128,19 +1118,17 @@ create or replace package body EAM_EPM is
                        from cconectividad_g
                       where g3e_fno = 14600
                         and nombre_circuito = circuito.codigo) loop
-        insert into eam_activos
+        insert into eam_activos_temp
         values
           (vClaseTuberiaArteria,
            activo.g3e_fid,
            activo.g3e_fno,
-           (select g3e_username
-              from g3e_feature
-             where g3e_fno = activo.g3e_fno),
            null,
            circuito.codigo_ubicacion,
            7,
            circuito.g3e_fid,
            'ART-' || circuito.codigo,
+           null,
            0,
            0,
            sysdate);
@@ -1149,19 +1137,17 @@ create or replace package body EAM_EPM is
     
       --Obra Civil Arteria
       for activo in ls_ar_oc(circuito.codigo) loop
-        insert into eam_activos
+        insert into eam_activos_temp
         values
           (vClaseObraCivilArteria,
            activo.fid_protec,
            activo.fno_protec,
-           (select g3e_username
-              from g3e_feature
-             where g3e_fno = activo.fno_protec),
            null,
            circuito.codigo_ubicacion,
            7,
            activo.fid_tuberia,
            'ART-' || circuito.codigo,
+           null,
            0,
            0,
            sysdate);
@@ -1174,36 +1160,32 @@ create or replace package body EAM_EPM is
                        from cconectividad_g
                       where g3e_fno = 15100
                         and nombre_circuito = circuito.codigo) loop
-        insert into eam_activos
+        insert into eam_activos_temp
         values
           (vClaseAnillo,
            activo.g3e_fid,
            activo.g3e_fno,
-           (select g3e_username
-              from g3e_feature
-             where g3e_fno = activo.g3e_fno),
            activo.codigo_valvula || '-6',
            circuito.codigo_ubicacion,
            6,
            circuito.g3e_fid,
            null,
+           null,
            0,
            0,
            sysdate);
       
-        insert into eam_activos
+        insert into eam_activos_temp
         values
           (vClasePolivalvulaAnillo,
            activo.g3e_fid,
            activo.g3e_fno,
-           (select g3e_username
-              from g3e_feature
-             where g3e_fno = activo.g3e_fno),
            null,
            circuito.codigo_ubicacion,
            7,
            circuito.g3e_fid,
            activo.codigo_valvula || '-6',
+           null,
            0,
            0,
            sysdate);
@@ -1215,19 +1197,17 @@ create or replace package body EAM_EPM is
                        from cconectividad_g
                       where g3e_fno = 15000
                         and nombre_circuito = circuito.codigo) loop
-        insert into eam_activos
+        insert into eam_activos_temp
         values
           (vClaseTuberiaAnillo,
            activo.g3e_fid,
            activo.g3e_fno,
-           (select g3e_username
-              from g3e_feature
-             where g3e_fno = activo.g3e_fno),
            null,
            circuito.codigo_ubicacion,
            7,
            circuito.g3e_fid,
            activo.codigo_valvula || '-6',
+           null,
            0,
            0,
            sysdate);
@@ -1236,19 +1216,17 @@ create or replace package body EAM_EPM is
     
       --Obra Civil Anillo
       for activo in ls_an_oc(circuito.codigo) loop
-        insert into eam_activos
+        insert into eam_activos_temp
         values
           (vClaseObraCivilAnillo,
            activo.fid_protec,
            activo.fno_protec,
-           (select g3e_username
-              from g3e_feature
-             where g3e_fno = activo.fno_protec),
            null,
            circuito.codigo_ubicacion,
            7,
            activo.fid_tuberia,
            activo.codigo_valvula || '-6',
+           null,
            0,
            0,
            sysdate);
@@ -1257,6 +1235,104 @@ create or replace package body EAM_EPM is
       commit;
     
     end loop;
+  
+    --Manejo de los Retirados
+    --Unos elementos se insertan sin correr las tablas de coonectividad o pertenencia
+    --y con esso se quedan elementos retirados acá
+  
+    delete from eam_activos_temp
+     where g3e_fid in (select ea.g3e_fid
+                         from eam_activos_temp ea
+                        inner join ccomun c
+                           on c.g3e_fid = ea.g3e_fid
+                          and c.g3e_fno = ea.g3e_fno
+                        where c.estado = 'RETIRADO');
+    commit;
+  
+    --Elementos que estaban en la ejecucion anterior y no estan más en esta ejecución fueron retirados
+    select count(1) into vCount from eam_activos;
+    if vCount > 0 then
+      for cRet in (select ea.g3e_fid
+                     from eam_activos ea
+                    where not exists (select *
+                             from eam_activos_ret
+                            where g3e_fid = ea.g3e_fid)
+                   minus
+                   select eat.g3e_fid
+                     from eam_activos_temp eat) loop
+        for eRet in (select * from eam_activos where g3e_fid = cRet.g3e_fid) loop
+          insert into eam_activos_ret
+          values
+            (eret.clase,
+             eret.g3e_fid,
+             eret.g3e_fno,
+             eret.codigo_activo,
+             eret.ubicacion,
+             eret.nivel,
+             eret.fid_padre,
+             eret.nivel_superior,
+             eret.descripcion,
+             eret.activo,
+             eret.ordem,
+             sysdate);
+        end loop;
+      
+        commit;
+      
+      end loop;
+    
+    end if;
+  
+    --Mantener la fecha de actualizacion
+    update eam_activos_temp set fecha_act = sysdate;
+    commit;
+  
+    --borrar de la tablas eam_activos los registros diferentes y nuevos que hay en la tabla eam_activo_temp
+    --esto se hace para garantizar que la fecha sea actualizada (y los valores diferentes) en en proximo paso
+    delete from eam_activos ea
+     where exists
+     (select nuevo.clase,
+                   nuevo.g3e_fid,
+                   nuevo.g3e_fno,
+                   nuevo.codigo_activo codigo_activo_n,
+                   viejo.codigo_activo codigo_activo_v,
+                   nuevo.ubicacion     ubicacion_n,
+                   viejo.ubicacion     ubicacion_v,
+                   nuevo.fid_padre     fid_padre_n,
+                   viejo.fid_padre     fid_padre_v,
+                   viejo.fecha_act
+              from eam_activos_temp nuevo
+              left join eam_activos viejo
+                on nuevo.clase = viejo.clase
+               and nuevo.g3e_fid = viejo.g3e_fid
+               and nuevo.g3e_fno = viejo.g3e_fno
+             where (nvl(nuevo.codigo_activo, 0) !=
+                   nvl(viejo.codigo_activo, 0) or
+                   nvl(nuevo.ubicacion, 0) != nvl(viejo.ubicacion, 0) or
+                   nvl(nuevo.fid_padre, 0) != nvl(viejo.fid_padre, 0))
+               and nuevo.g3e_fid = ea.g3e_fid
+               and nuevo.clase = ea.clase
+               and nuevo.g3e_fno = ea.g3e_fno);
+    commit;
+  
+    --inserta los registros diferente y nuevos que hay en la tabla eam_activos_temp en la 
+    --ter um registro no eam_activo que nao tem no eam_activo_temp
+    insert into eam_activos
+      (select nuevo.*
+         from eam_activos_temp nuevo
+         left join eam_activos viejo
+           on nuevo.clase = viejo.clase
+          and nuevo.g3e_fid = viejo.g3e_fid
+          and nuevo.g3e_fno = viejo.g3e_fno
+        where (nvl(nuevo.codigo_activo, 0) != nvl(viejo.codigo_activo, 0) or
+              nvl(nuevo.ubicacion, 0) != nvl(viejo.ubicacion, 0) or
+              nvl(nuevo.fid_padre, 0) != nvl(viejo.fid_padre, 0)));
+    commit;
+  
+    delete from eam_ubicacion;
+    commit;
+    insert into eam_ubicacion (select * from eam_ubicacion_temp);
+    commit;
   
   end EAM_TAXONOMIA;
 

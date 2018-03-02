@@ -1,14 +1,15 @@
+DROP TABLE EAM_ACTIVOS;
 CREATE TABLE EAM_ACTIVOS
 (
   CLASE          VARCHAR2(50),
   G3E_FID        NUMBER(10),
   G3E_FNO        NUMBER(10),
-  ACTIVO_NOMBRE  VARCHAR2(50),
   CODIGO_ACTIVO  VARCHAR2(50),
   UBICACION      VARCHAR2(100),
   NIVEL          NUMBER,
   FID_PADRE      NUMBER,
-  NIVEL_PADRE    VARCHAR2(100),
+  NIVEL_SUPERIOR VARCHAR2(100),
+  DESCRIPCION    VARCHAR2(100),
   ACTIVO         NUMBER,
   ORDEM          NUMBER,
   FECHA_ACT      DATE
@@ -23,9 +24,6 @@ is 'G3E_FID del Activo';
 comment on column EAM_ACTIVOS.G3E_FNO
 is 'G3E_FNO del Activo';
   
-comment on column EAM_ACTIVOS.ACTIVO_NOMBRE
-is 'Es el Username del G3E_FNO';
-  
 comment on column EAM_ACTIVOS.CODIGO_ACTIVO
 is 'Codigo del Activo que se genera para el EAM';
   
@@ -38,7 +36,7 @@ is 'Nivel actual del activo (6 u 7)';
 comment on column EAM_ACTIVOS.FID_PADRE
 is 'FID que tiene alguna relación para generar el activo actual.';
   
-comment on column EAM_ACTIVOS.NIVEL_PADRE
+comment on column EAM_ACTIVOS.NIVEL_SUPERIOR
 is 'CODIGO_ACTIVO del activo padre que tiene alguna relación para generar el activo actual';
   
 comment on column EAM_ACTIVOS.ACTIVO
@@ -51,16 +49,70 @@ comment on column EAM_ACTIVOS.FECHA_ACT
 is 'La ultima fecha que hube cambios en este activo';
 
 
+comment on column EAM_ACTIVOS.DESCRIPCION
+is 'Descripcion del activo';
+
+
+
+DROP TABLE EAM_ACTIVOS_TEMP;
+CREATE TABLE EAM_ACTIVOS_TEMP
+(
+  CLASE          VARCHAR2(50),
+  G3E_FID        NUMBER(10),
+  G3E_FNO        NUMBER(10),
+  CODIGO_ACTIVO  VARCHAR2(50),
+  UBICACION      VARCHAR2(100),
+  NIVEL          NUMBER,
+  FID_PADRE      NUMBER,
+  NIVEL_SUPERIOR VARCHAR2(100),
+  DESCRIPCION    VARCHAR2(100),
+  ACTIVO         NUMBER,
+  ORDEM          NUMBER,
+  FECHA_ACT      DATE
+);
+
+DROP TABLE EAM_ACTIVOS_RET;
+CREATE TABLE EAM_ACTIVOS_RET
+(
+  CLASE          VARCHAR2(50),
+  G3E_FID        NUMBER(10),
+  G3E_FNO        NUMBER(10),
+  CODIGO_ACTIVO  VARCHAR2(50),
+  UBICACION      VARCHAR2(100),
+  NIVEL          NUMBER,
+  FID_PADRE      NUMBER,
+  NIVEL_SUPERIOR VARCHAR2(100),
+  DESCRIPCION    VARCHAR2(100),
+  ACTIVO         NUMBER,
+  ORDEM          NUMBER,
+  FECHA_ACT      DATE
+);
+
+DROP TABLE EAM_UBICACION;
 CREATE TABLE EAM_UBICACION
 (
   CLASE                      VARCHAR2(50),
   G3E_FID                    NUMBER(10),
   G3E_FNO                    NUMBER(5),
-  ACTIVO_NOMBRE              VARCHAR2(50),
   CODIGO                     VARCHAR2(100),
   CODIGO_UBICACION           VARCHAR2(100),
   NIVEL                      NUMBER,
   NIVEL_SUPERIOR             VARCHAR2(50),
+  DESCRIPCION                VARCHAR2(100),
+  FECHA_ACT                  DATE
+);
+
+DROP TABLE EAM_UBICACION_TEMP;
+CREATE TABLE EAM_UBICACION_TEMP
+(
+  CLASE                      VARCHAR2(50),
+  G3E_FID                    NUMBER(10),
+  G3E_FNO                    NUMBER(5),
+  CODIGO                     VARCHAR2(100),
+  CODIGO_UBICACION           VARCHAR2(100),
+  NIVEL                      NUMBER,
+  NIVEL_SUPERIOR             VARCHAR2(50),
+  DESCRIPCION                VARCHAR2(100),
   FECHA_ACT                  DATE
 );
 
@@ -73,10 +125,7 @@ is 'G3E_FID del Padre de la Ubicacion';
   
 comment on column EAM_UBICACION.G3E_FNO
 is 'G3E_FNO del Padre de la Ubicacion';
-  
-comment on column EAM_UBICACION.ACTIVO_NOMBRE
-is 'Es el Username del G3E_FNO';
-  
+
 comment on column EAM_UBICACION.CODIGO
 is 'Codigo de la ubicación';
   
@@ -91,7 +140,12 @@ is 'Nombre de la ubicación superior';
   
 comment on column EAM_UBICACION.FECHA_ACT
 is 'La ultima fecha que hube cambios en esta ubicación';
+
+comment on column EAM_UBICACION.DESCRIPCION  
+is 'Descripción de la ubicación';
   
+
+DROP TABLE EAM_ERRORS;
 CREATE TABLE EAM_ERRORS
 (
   CIRCUITO     VARCHAR2(50),
@@ -102,6 +156,7 @@ CREATE TABLE EAM_ERRORS
 );
 
 
+DROP TABLE EAM_CONFIG;
 CREATE TABLE EAM_CONFIG
 (
   DESCRIPCION  VARCHAR2(50),
@@ -153,8 +208,10 @@ grupo number(10),
 ordem number(10),
 tipo varchar2(30)
 );
+/
 
 
 
 create or replace type eam_trace_table as table of eam_trace_record;
 /
+
