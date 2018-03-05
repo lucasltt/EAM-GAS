@@ -5,14 +5,23 @@ create or replace package EAM_EPM is
   -- Author  : Lucas Turchet
   -- Created : 23/02/18
   -- Purpose : Disponibilización de Activos para Integración con EAM GAS
-  
-  
-  -- Creación
+
+  -- Modificación
   -- Version : 1.1
   -- Author  : Lucas Turchet
   -- Created : 02/03/18
-  -- Adicion de Reglas de Activos Retirados
-  -- Adicion de Reglas de Actualización de Fechas
+  -- 1.   Adición de Reglas de Activos Retirados
+  -- 2.   Adición de Reglas de Actualización de Fechas
+
+  -- Modificación
+  -- Version : 1.2
+  -- Author  : Lucas Turchet
+  -- Created : 06/03/18
+  -- 1.   Cada ejecución tiene una fecha solo
+  -- 2.   Fecha de actualización para Ubicación
+  -- 3.   Función de Respaldar Tablas
+  -- 4.   Función de Limpiar Tablas
+  -- 5.   Recla de Nodo Primario para los Ramales
 
   -- Busca los elementos de un Número de Tramo Específico
   function EAM_TRACETRAMOESPECIFICO(nrTramo IN NUMBER) return EAM_TRACE_TABLE;
@@ -34,6 +43,18 @@ create or replace package EAM_EPM is
 
   -- Ejecuta toda la taxonima de GAS
   procedure EAM_TAXONOMIA;
+
+  -- Limpar el contenido de las tablas:
+  -- EAM_ACTIVOS
+  -- EAM_ACTIVOS_RET
+  -- EAM_UBICACION
+  procedure EAM_LIMPIAR_TABLAS;
+
+  -- Crea tablas respaldo de las tablas:
+  -- EAM_ACTIVOS (EAM_ACTIVOS_BKP)
+  -- EAM_ACTIVOS_RET (EAM_ACTIVOS_RET_BKP)
+  -- EAM_UBICACION (EAM_UBICACION_BKP)
+  procedure EAM_RESPALDAR_TABLAS;
 
 end EAM_EPM;
 /
@@ -476,12 +497,14 @@ create or replace package body EAM_EPM is
     codigo       varchar2(50); --codigo del activo
     codigo_padre varchar2(50); --codigo del activo padre
     vCount       number; --auxiliar
+    vTipoNodo    varchar2(50);
     vTramos      number; --cantidad de tramos
     vPerID       cpertenencia.G3E_ID%type; --guarda el id de la pertenencia
     vRamalFNO    number(5);
     vRamalFID    number(10);
     vRamalFecha  date;
     vFechaComun  date;
+    vFechaEjec   date;
   
     --Configuraciones
     vClaseTramosMatriz            VARCHAR2(100);
@@ -883,10 +906,12 @@ create or replace package body EAM_EPM is
                                    2 --Clientes
                                   when t.g3e_fno = 15600 then
                                    3 --Estación de Servicio
+                                  when t.g3e_fno = 14000 then
+                                   4 --Nodo Primario
                                   when t.g3e_fno = 14100 then
-                                   4 --Tuberia Primaria
+                                   5 --Tuberia Primaria
                                   else
-                                   5 --Otros
+                                   6 --Otros
                                 end) loop
       
         if elTrace.g3e_fno = 14400 then
@@ -982,6 +1007,46 @@ create or replace package body EAM_EPM is
             end;
           end if;
         
+        end if;
+      
+        if elTrace.g3e_fno = 14000 then
+          --Nodo Primario
+        
+          if vRamalFno = 0 then
+            --No he encontrado ningun otro elemento padre del Ramal
+            select tipo_nodo
+              into vTipoNodo
+              from GNOD_PRM_AT
+             where g3e_fid = elTrace.g3e_fid
+               and g3e_fno = elTrace.g3e_fno;
+          
+            if vTipoNodo = 'TAPON' then
+              begin
+                select fecha_instalacion
+                  into vFechaComun
+                  from ccomun
+                 where g3e_fno = elTrace.g3e_fno
+                   and g3e_fid = elTrace.g3e_fid;
+              
+                vRamalFNO   := elTrace.g3e_fno;
+                vRamalFID   := elTrace.g3e_fid;
+                vRamalFecha := vFechaComun;
+              
+              exception
+                when others then
+                  insert into eam_errors
+                  values
+                    ('RAMAL ' || cRamal.Tipo_Nombre,
+                     elTrace.g3e_fid,
+                     elTrace.g3e_fno,
+                     sysdate,
+                     'El elemento no tiene Fecha de Instalación');
+                  commit;
+              end;
+            
+            end if;
+          
+          end if;
         end if;
       
         if elTrace.g3e_fno = 14100 then
@@ -1236,6 +1301,12 @@ create or replace package body EAM_EPM is
     
     end loop;
   
+    select sysdate into vFechaEjec from dual;
+    update eam_activos_temp set fecha_act = vFechaEjec;
+    commit;
+    update eam_ubicacion_temp set fecha_act = vFechaEjec;
+    commit;
+  
     --Manejo de los Retirados
     --Unos elementos se insertan sin correr las tablas de coonectividad o pertenencia
     --y con esso se quedan elementos retirados acá
@@ -1249,6 +1320,7 @@ create or replace package body EAM_EPM is
                         where c.estado = 'RETIRADO');
     commit;
   
+    --Manejo de los retirados
     --Elementos que estaban en la ejecucion anterior y no estan más en esta ejecución fueron retirados
     select count(1) into vCount from eam_activos;
     if vCount > 0 then
@@ -1283,10 +1355,11 @@ create or replace package body EAM_EPM is
     
     end if;
   
-    --Mantener la fecha de actualizacion
-    update eam_activos_temp set fecha_act = sysdate;
+    delete from eam_activos
+     where g3e_fid in (select g3e_fid from eam_activos_ret);
     commit;
   
+    --Mantener la fecha de actualizacion
     --borrar de la tablas eam_activos los registros diferentes y nuevos que hay en la tabla eam_activo_temp
     --esto se hace para garantizar que la fecha sea actualizada (y los valores diferentes) en en proximo paso
     delete from eam_activos ea
@@ -1329,12 +1402,66 @@ create or replace package body EAM_EPM is
               nvl(nuevo.fid_padre, 0) != nvl(viejo.fid_padre, 0)));
     commit;
   
-    delete from eam_ubicacion;
+    delete from eam_ubicacion eu
+     where exists (select nuevo.clase, nuevo.g3e_fid, nuevo.g3e_fno
+              from eam_ubicacion_temp nuevo
+              left join eam_ubicacion viejo
+                on nuevo.clase = viejo.clase
+               and nuevo.g3e_fid = viejo.g3e_fid
+               and nuevo.g3e_fno = viejo.g3e_fno
+             where (nvl(nuevo.codigo, 0) != nvl(viejo.codigo, 0) or
+                   nvl(nuevo.codigo_ubicacion, 0) !=
+                   nvl(viejo.codigo_ubicacion, 0) or
+                   nvl(nuevo.nivel_superior, 0) !=
+                   nvl(viejo.nivel_superior, 0))
+               and nuevo.g3e_fid = eu.g3e_fid
+               and nuevo.clase = eu.clase
+               and nuevo.g3e_fno = eu.g3e_fno);
     commit;
-    insert into eam_ubicacion (select * from eam_ubicacion_temp);
+  
+    --inserta los registros diferente y nuevos que hay en la tabla eam_activos_temp en la 
+    --ter um registro no eam_activo que nao tem no eam_activo_temp
+    insert into eam_ubicacion
+      (select nuevo.*
+         from eam_ubicacion_temp nuevo
+         left join eam_ubicacion viejo
+           on nuevo.clase = viejo.clase
+          and nuevo.g3e_fid = viejo.g3e_fid
+          and nuevo.g3e_fno = viejo.g3e_fno
+        where (nvl(nuevo.codigo, 0) != nvl(viejo.codigo, 0) or
+              nvl(nuevo.codigo_ubicacion, 0) !=
+              nvl(viejo.codigo_ubicacion, 0) or
+              nvl(nuevo.nivel_superior, 0) != nvl(viejo.nivel_superior, 0)));
     commit;
   
   end EAM_TAXONOMIA;
+
+  procedure EAM_LIMPIAR_TABLAS is
+  begin
+    execute immediate 'TRUNCATE TABLE EAM_ACTIVOS_RET';
+    execute immediate 'TRUNCATE TABLE EAM_UBICACION';
+    execute immediate 'TRUNCATE TABLE EAM_ACTIVOS';
+  end;
+
+  procedure EAM_RESPALDAR_TABLAS is
+  begin
+  
+    begin
+      execute immediate 'DROP TABLE EAM_ACTIVOS_BKP';
+    end;
+  
+    begin
+      execute immediate 'DROP TABLE EAM_ACTIVOS_RET_BKP';
+    end;
+  
+    begin
+      execute immediate 'DROP TABLE EAM_UBICACION_BKP';
+    end;
+  
+    execute immediate 'CREATE TABLE EAM_ACTIVOS_BKP AS SELECT * FROM EAM_ACTIVOS';
+    execute immediate 'CREATE TABLE EAM_ACTIVOS_RET_BKP AS SELECT * FROM EAM_ACTIVOS_RET';
+    execute immediate 'CREATE TABLE EAM_UBICACION_BKP AS SELECT * FROM EAM_UBICACION';
+  end;
 
 end EAM_EPM;
 /
