@@ -1,6 +1,7 @@
 DROP TABLE EAM_ACTIVOS;
 CREATE TABLE EAM_ACTIVOS
 (
+  REGION         VARCHAR2(100),  
   CLASE          VARCHAR2(50),
   G3E_FID        NUMBER(10),
   G3E_FNO        NUMBER(10),
@@ -14,6 +15,11 @@ CREATE TABLE EAM_ACTIVOS
   ORDEM          NUMBER,
   FECHA_ACT      DATE
 );
+
+
+
+comment on column EAM_ACTIVOS.REGION
+is 'Nombre de la region (circuito, ramal u linea primaria)';
 
 comment on column EAM_ACTIVOS.CLASE
 is 'Nombre de la clase del activo (nivel 6 u 7)';
@@ -57,6 +63,7 @@ is 'Descripcion del activo';
 DROP TABLE EAM_ACTIVOS_TEMP;
 CREATE TABLE EAM_ACTIVOS_TEMP
 (
+  REGION         VARCHAR2(100), 
   CLASE          VARCHAR2(50),
   G3E_FID        NUMBER(10),
   G3E_FNO        NUMBER(10),
@@ -74,6 +81,7 @@ CREATE TABLE EAM_ACTIVOS_TEMP
 DROP TABLE EAM_ACTIVOS_RET;
 CREATE TABLE EAM_ACTIVOS_RET
 (
+  REGION         VARCHAR2(100), 
   CLASE          VARCHAR2(50),
   G3E_FID        NUMBER(10),
   G3E_FNO        NUMBER(10),
@@ -172,15 +180,12 @@ insert into eam_config values ('TRAMO', 498810);
 insert into eam_config values ('TRAMO', 295863);
 insert into eam_config values ('TRAMO', 193075);
 insert into eam_config values('ClaseTramosMatriz','TRAMO');
-insert into eam_config values('UbicacionMatriz','MATRIZ');
 insert into eam_config values('ClaseEstacionSeccionamiento','ESTACION VALVULA DE SECCIONAMIENTO');
-insert into eam_config values('UbicacionEstacionSeccionamiento','SISVAL');
 insert into eam_config values('ClaseInstrumentacion','INSTRUMENTACION Y CONTROL');
 insert into eam_config values('ClaseObraCivilSeccionamiento','OBRA CIVIL SECCIONAMIENTO');
 insert into eam_config values('ClaseByPass','BY-PASS');
 insert into eam_config values('ClaseObraCivilMatriz','OBRA CIVIL MATRIZ');
 insert into eam_config values('ClaseRamal','RAMAL');
-insert into eam_config values('UbicacionRamal','RAMALES');
 insert into eam_config values('ClaseCircuito','CIRCUITO');
 insert into eam_config values('SuperiorCircuito','LINSEC');
 insert into eam_config values('ClaseTuberiaRamal','TUBERIA PRIMARIA');
@@ -193,6 +198,38 @@ insert into eam_config values('ClaseAnillo','ANILLO');
 insert into eam_config values('ClasePolivalvulaAnillo','POLIVALVULA ANILLO');
 insert into eam_config values('ClaseTuberiaAnillo','TUBERIA ANILLO');
 insert into eam_config values('ClaseObraCivilAnillo','OBRA CIVIL ANILLO');
+insert into eam_config values('LineaMatrizRedMetropolitana','LMV');
+insert into eam_config values('RamalesRedMetropolitana','RMV');
+insert into eam_config values('CeldasKirkRedMetropolitana','CKV');
+insert into eam_config values('ProteccionCatodiaRedMetropolitana','PCV');
+insert into eam_config values('SistemasValvulasRedMetropolitana','VAV');
+insert into eam_config values('LineaSecundariaRedMetropolitana','LSVA');
+insert into eam_config values('LineaMatrizRedRegionAntioquia','LMR');
+insert into eam_config values('RamalesRedRegionAntioquia','RMR');
+insert into eam_config values('CeldasKirkRedRegionAntioquia','CKR');
+insert into eam_config values('ProteccionCatodiaRedRegionAntioquia','PCR');
+insert into eam_config values('SistemasValvulasRedRegionAntioquia','VAR');
+insert into eam_config values('LineaSecundariaRedRegionAntioquia','LSRA');
+insert into eam_config values('RedMetropolitanaMunId', 05079);
+insert into eam_config values('RedMetropolitanaMunId', 05308);
+insert into eam_config values('RedMetropolitanaMunId', 05212);
+insert into eam_config values('RedMetropolitanaMunId', 05266);
+insert into eam_config values('RedMetropolitanaMunId', 05631);
+insert into eam_config values('RedMetropolitanaMunId', 05129);
+insert into eam_config values('RedMetropolitanaMunId', 05380);
+insert into eam_config values('RedMetropolitanaMunId', 05001);
+insert into eam_config values('RedMetropolitanaMunId', 05088);
+insert into eam_config values('RedMetropolitanaMunId', 05360);
+insert into eam_config values('ClaseUnidadRectificadora','UNIDAD RECTIFICADORA');
+insert into eam_config values('ClaseRectificador','RECTIFICADOR');
+insert into eam_config values('ClaseObraCivilRectificador','OBRA CIVIL RECTIFICADOR');
+insert into eam_config values('ClasePedestalMonitoreo','PEDESTAL DE MONITOREO');
+insert into eam_config values('ClaseUnidadAislamiento','UNIDAD DE AISLAMIENTO');
+insert into eam_config values('ClaseCeldaKirk','CELDA KIRK');
+insert into eam_config values('ClaseEstacionDerivacion','ESTACION DE VALVULAS DE DERIVACION');
+insert into eam_config values('ClaseValvulaDerivacion','VALVULA DE DERIVACION');
+insert into eam_config values('ClaseObraCivilDerivacion','OBRA CIVIL DERIVACION');
+insert into eam_config values('RegionLineaPrimaria','LINEA PRIMARIA');
 commit;
 
 

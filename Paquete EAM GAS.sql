@@ -23,6 +23,20 @@ create or replace package EAM_EPM is
   -- 4.   Función de Limpiar Tablas
   -- 5.   Recla de Nodo Primario para los Ramales
 
+  -- Modificación
+  -- Version : 1.3
+  -- Author  : Lucas Turchet
+  -- Created : 13/03/18
+  -- 1.   Reglas de nombramiento de activos
+  -- 2.   Taxonomia de Protección Catodica
+  -- 3.   Taxonomia de Celda Kirks
+  -- 4.   Ubicacion Inteligente para circuitos y ramales
+  --      (no se cambia el codigo de la ubicación al reemplazar el elemento padre)
+  -- 5.   Campo REGION en la tabla de activos
+  -- 6.   Reglas de códigos de ubicación
+  -- 7.   Nueva selección de los circuitos disponibles
+  -- 8.   Inserción de la clase 'Estación Valvulas de Derivación'
+
   -- Busca los elementos de un Número de Tramo Específico
   function EAM_TRACETRAMOESPECIFICO(nrTramo IN NUMBER) return EAM_TRACE_TABLE;
 
@@ -55,6 +69,9 @@ create or replace package EAM_EPM is
   -- EAM_ACTIVOS_RET (EAM_ACTIVOS_RET_BKP)
   -- EAM_UBICACION (EAM_UBICACION_BKP)
   procedure EAM_RESPALDAR_TABLAS;
+
+  -- Mira si el activo pertenence a la Red Metropolitana
+  function EAM_ESMETROPOLITANA(pFID IN NUMBER, pFNO in NUMBER) return number;
 
 end EAM_EPM;
 /
@@ -508,15 +525,12 @@ create or replace package body EAM_EPM is
   
     --Configuraciones
     vClaseTramosMatriz            VARCHAR2(100);
-    vUbicacionMatriz              VARCHAR2(100);
     vClaseEstacionSeccionamiento  VARCHAR2(100);
-    vUbicacionEstSeccionamiento   VARCHAR2(100);
     vClaseInstrumentacion         VARCHAR2(100);
     vClaseObraCivilSeccionamiento VARCHAR2(100);
     vClaseByPass                  VARCHAR2(100);
     vClaseObraCivilMatriz         VARCHAR2(100);
     vClaseRamal                   VARCHAR2(100);
-    vUbicacionRamal               VARCHAR2(100);
     vClaseCircuito                VARCHAR2(100);
     vSuperiorCircuito             VARCHAR2(100);
     vClaseTuberiaRamal            VARCHAR2(100);
@@ -529,12 +543,36 @@ create or replace package body EAM_EPM is
     vClasePolivalvulaAnillo       VARCHAR2(100);
     vClaseTuberiaAnillo           VARCHAR2(100);
     vClaseObraCivilAnillo         VARCHAR2(100);
+    vClaseUnidadRectificadora     VARCHAR2(100);
+    vClaseRectificador            VARCHAR2(100);
+    vClaseObraCivilRectificador   VARCHAR2(100);
+    vClasePedestalMonitoreo       VARCHAR2(100);
+    vClaseUnidadAislamiento       VARCHAR2(100);
+    vClaseCeldaKirk               VARCHAR2(100);
+    vClaseEstacionDerivacion      VARCHAR2(100);
+    vClaseValvulaDerivacion       VARCHAR2(100);
+    vClaseObraCivilDerivacion     VARCHAR2(100);
+    vRegionLineaPrimaria          VARCHAR2(100);
+  
+    vLineaMatrizRedM          VARCHAR2(100);
+    vRamalesRedM              VARCHAR2(100);
+    vCeldasKirkRedM           VARCHAR2(100);
+    vProteccionCatodiaRedM    VARCHAR2(100);
+    vSistemasValvulasRedM     VARCHAR2(100);
+    vLineaSecundariaRedM      VARCHAR2(100);
+    vLineaMatrizRedRegA       VARCHAR2(100);
+    vRamalesRedRegA           VARCHAR2(100);
+    vCeldasKirkRedRegA        VARCHAR2(100);
+    vProteccionCatodiaRedRegA VARCHAR2(100);
+    vSistemasValvulasRedRegA  VARCHAR2(100);
+    vLineaSecundariaRedRegA   VARCHAR2(100);
   
     --Linea Primaria -> Linea Matriz -> Obra Civil
     cursor lp_lm_oc is
-      select protec.g3e_fid fid_protec,
-             protec.g3e_fno fno_protec,
-             tubp.g3e_fid   tub_fid
+      select protec.g3e_fid   fid_protec,
+             protec.g3e_fno   fno_protec,
+             tubp.g3e_fid     tub_fid,
+             tubp.tipo_nombre nombre_ramal
         from cpertenencia protec
        inner join cpertenencia tub
           on tub.g3e_id = protec.G3E_OWNERID
@@ -559,6 +597,48 @@ create or replace package body EAM_EPM is
          and protec.G3E_OWNERID is not null
          and tubp.tipo = 'RAMAL'
        order by tubp.tipo_nombre;
+  
+    --Linear Primaria, Proteccion Catódica
+    cursor lp_proteccion is
+      select protec.g3e_fid, protec.g3e_fno, protec.tipo_proteccion_activa
+        from GPRO_ACT_AT protec
+       inner join ccomun cm
+          on cm.g3e_fid = protec.g3e_fid
+         and cm.g3e_fno = protec.g3e_fno
+       where cm.estado != 'RETIRADO';
+  
+    --Linea Primaria, Unidad de Aislamiento
+    cursor lp_uni_aisla is
+      select nd.g3e_fid, nd.g3e_fno, nd.tipo_nodo
+        from GNOD_PRM_AT nd
+       inner join ccomun cm
+          on cm.g3e_fid = nd.g3e_fid
+         and cm.g3e_fno = nd.g3e_fno
+       where nd.tipo_nodo in ('JUNTA MONOLITICA', 'BRIDA AISLAMIENTO')
+         and cm.estado != 'RETIRADO';
+  
+    --Linea Primaria, Celda Kirk
+    cursor lp_celda is
+      select cd.g3e_fid, cd.g3e_fno
+        from GCEL_KIR_AT cd
+       inner join ccomun cm
+          on cm.g3e_fid = cd.g3e_fid
+         and cm.g3e_fno = cd.g3e_fno
+       where cm.estado != 'RETIRADO';
+  
+    --Circuitos
+    cursor circuitos is
+      select min(cn.g3e_fid) g3e_fid,
+             min(cn.g3e_fno) g3e_fno,
+             cn.nombre_circuito
+        from cconectividad_g cn
+       inner join ccomun cm
+          on cm.g3e_fid = cn.g3e_fid
+         and cm.g3e_fno = cn.G3E_FNO
+       where cn.g3e_fno = 14400
+         and cm.ESTADO != 'RETIRADO'
+       group by cn.NOMBRE_CIRCUITO
+      having count(1) = 1;
   
     --Linea Secundaria -> Arteria -> Obra Civil
     cursor ls_ar_oc(pCircuito VARCHAR2) is
@@ -610,17 +690,9 @@ create or replace package body EAM_EPM is
       from eam_config
      where descripcion = 'ClaseTramosMatriz';
     select valor
-      into vUbicacionMatriz
-      from eam_config
-     where descripcion = 'UbicacionMatriz';
-    select valor
       into vClaseEstacionSeccionamiento
       from eam_config
      where descripcion = 'ClaseEstacionSeccionamiento';
-    select valor
-      into vUbicacionEstSeccionamiento
-      from eam_config
-     where descripcion = 'UbicacionEstacionSeccionamiento';
     select valor
       into vClaseInstrumentacion
       from eam_config
@@ -641,10 +713,6 @@ create or replace package body EAM_EPM is
       into vClaseRamal
       from eam_config
      where descripcion = 'ClaseRamal';
-    select valor
-      into vUbicacionRamal
-      from eam_config
-     where descripcion = 'UbicacionRamal';
     select valor
       into vClaseCircuito
       from eam_config
@@ -693,6 +761,95 @@ create or replace package body EAM_EPM is
       into vClaseObraCivilAnillo
       from eam_config
      where descripcion = 'ClaseObraCivilAnillo';
+    select valor
+      into vClaseUnidadRectificadora
+      from eam_config
+     where descripcion = 'ClaseUnidadRectificadora';
+    select valor
+      into vClaseRectificador
+      from eam_config
+     where descripcion = 'ClaseRectificador';
+    select valor
+      into vClaseObraCivilRectificador
+      from eam_config
+     where descripcion = 'ClaseObraCivilRectificador';
+    select valor
+      into vClasePedestalMonitoreo
+      from eam_config
+     where descripcion = 'ClasePedestalMonitoreo';
+    select valor
+      into vClaseUnidadAislamiento
+      from eam_config
+     where descripcion = 'ClaseUnidadAislamiento';
+    select valor
+      into vClaseCeldaKirk
+      from eam_config
+     where descripcion = 'ClaseCeldaKirk';
+    select valor
+      into vClaseEstacionDerivacion
+      from eam_config
+     where descripcion = 'ClaseEstacionDerivacion';
+    select valor
+      into vClaseValvulaDerivacion
+      from eam_config
+     where descripcion = 'ClaseValvulaDerivacion';
+    select valor
+      into vClaseObraCivilDerivacion
+      from eam_config
+     where descripcion = 'ClaseObraCivilDerivacion';
+  
+    select valor
+      into vLineaMatrizRedM
+      from eam_config
+     where descripcion = 'LineaMatrizRedMetropolitana';
+    select valor
+      into vRamalesRedM
+      from eam_config
+     where descripcion = 'RamalesRedMetropolitana';
+    select valor
+      into vCeldasKirkRedM
+      from eam_config
+     where descripcion = 'CeldasKirkRedMetropolitana';
+    select valor
+      into vProteccionCatodiaRedM
+      from eam_config
+     where descripcion = 'ProteccionCatodiaRedMetropolitana';
+    select valor
+      into vSistemasValvulasRedM
+      from eam_config
+     where descripcion = 'SistemasValvulasRedMetropolitana';
+    select valor
+      into vLineaSecundariaRedM
+      from eam_config
+     where descripcion = 'LineaSecundariaRedMetropolitana';
+    select valor
+      into vLineaMatrizRedRegA
+      from eam_config
+     where descripcion = 'LineaMatrizRedRegionAntioquia';
+    select valor
+      into vRamalesRedRegA
+      from eam_config
+     where descripcion = 'RamalesRedRegionAntioquia';
+    select valor
+      into vCeldasKirkRedRegA
+      from eam_config
+     where descripcion = 'CeldasKirkRedRegionAntioquia';
+    select valor
+      into vProteccionCatodiaRedRegA
+      from eam_config
+     where descripcion = 'ProteccionCatodiaRedRegionAntioquia';
+    select valor
+      into vSistemasValvulasRedRegA
+      from eam_config
+     where descripcion = 'SistemasValvulasRedRegionAntioquia';
+    select valor
+      into vLineaSecundariaRedRegA
+      from eam_config
+     where descripcion = 'LineaSecundariaRedRegionAntioquia';
+    select valor
+      into vRegionLineaPrimaria
+      from eam_config
+     where descripcion = 'RegionLineaPrimaria';
   
     select count(distinct(tipo_nombre))
       into vTramos
@@ -717,13 +874,16 @@ create or replace package body EAM_EPM is
               from gtub_prm_at
              where tipo = 'MATRIZ'
                and g3e_fid = elTrace.g3e_fid;
+          
             insert into eam_activos_temp
             values
-              (vClaseTramosMatriz,
+              (vRegionLineaPrimaria,
+               vClaseTramosMatriz,
                elTrace.g3e_fid,
                elTrace.g3e_fno,
-               codigo,
-               vUbicacionMatriz,
+               'TRAM-' || elTrace.grupo,
+               case EAM_ESMETROPOLITANA(elTrace.g3e_fid, elTrace.g3e_fno) when 1 then
+               vLineaMatrizRedM when 0 then vLineaMatrizRedRegA end, --vUbicacionMatriz,
                6,
                null,
                null,
@@ -739,7 +899,7 @@ create or replace package body EAM_EPM is
         elsif elTrace.g3e_fno = 14200 then
           --Valvula Primaria
         
-          --Mirar sy lla valvula ya fue caculada
+          --Mirar sy la valvula ya fue caculada
           select count(1)
             into vCount
             from table(pValvu) v
@@ -768,11 +928,13 @@ create or replace package body EAM_EPM is
         
           insert into eam_activos_temp
           values
-            (vClaseEstacionSeccionamiento,
+            (vRegionLineaPrimaria,
+             vClaseEstacionSeccionamiento,
              elTrace.g3e_fid,
              elTrace.g3e_fno,
-             codigo || '-6',
-             vUbicacionEstSeccionamiento,
+             'EVS-' || codigo,
+             case EAM_ESMETROPOLITANA(elTrace.g3e_fid, elTrace.g3e_fno) when 1 then
+             vSistemasValvulasRedM when 0 then vSistemasValvulasRedRegA end, --vUbicacionEstSeccionamiento,
              6,
              null,
              null,
@@ -783,14 +945,16 @@ create or replace package body EAM_EPM is
         
           insert into eam_activos_temp
           values
-            (vClaseInstrumentacion,
+            (vRegionLineaPrimaria,
+             vClaseInstrumentacion,
              elTrace.g3e_fid,
              elTrace.g3e_fno,
              null,
-             vUbicacionEstSeccionamiento,
+             case EAM_ESMETROPOLITANA(elTrace.g3e_fid, elTrace.g3e_fno) when 1 then
+             vSistemasValvulasRedM when 0 then vSistemasValvulasRedRegA end, --vUbicacionEstSeccionamiento,
              7,
              elTrace.g3e_fid,
-             codigo || '-6',
+             'EVS-' || codigo,
              null,
              null,
              null,
@@ -798,14 +962,16 @@ create or replace package body EAM_EPM is
         
           insert into eam_activos_temp
           values
-            (vClaseObraCivilSeccionamiento,
+            (vRegionLineaPrimaria,
+             vClaseObraCivilSeccionamiento,
              elTrace.g3e_fid,
              elTrace.g3e_fno,
              null,
-             vUbicacionEstSeccionamiento,
+             case EAM_ESMETROPOLITANA(elTrace.g3e_fid, elTrace.g3e_fno) when 1 then
+             vSistemasValvulasRedM when 0 then vSistemasValvulasRedRegA end, --vUbicacionEstSeccionamiento,
              7,
              elTrace.g3e_fid,
-             codigo || '-6',
+             'EVS-' || codigo,
              null,
              null,
              null,
@@ -833,14 +999,16 @@ create or replace package body EAM_EPM is
             
               insert into eam_activos_temp
               values
-                (vClaseByPass,
+                (vRegionLineaPrimaria,
+                 vClaseByPass,
                  bypass.g3e_fid,
                  bypass.g3e_fno,
                  null,
-                 vUbicacionEstSeccionamiento,
+                 case EAM_ESMETROPOLITANA(bypass.g3e_fid, bypass.g3e_fno) when 1 then
+                 vSistemasValvulasRedM when 0 then vSistemasValvulasRedRegA end, --vUbicacionEstSeccionamiento,
                  7,
                  elTrace.g3e_fid,
-                 codigo_padre || '-6',
+                 'EVS' || codigo_padre,
                  null,
                  null,
                  null,
@@ -863,11 +1031,18 @@ create or replace package body EAM_EPM is
     for clp_lm_oc in lp_lm_oc loop
       insert into eam_activos_temp
       values
-        (vClaseObraCivilMatriz,
+        (vRegionLineaPrimaria,
+         vClaseObraCivilMatriz,
          clp_lm_oc.fid_protec,
          clp_lm_oc.fno_protec,
          null,
-         vUbicacionMatriz,
+         case
+          EAM_ESMETROPOLITANA(clp_lm_oc.fid_protec, clp_lm_oc.fno_protec)
+           when 1 then
+            vLineaMatrizRedM
+           when 0 then
+            vLineaMatrizRedRegA
+         end, --vUbicacionMatriz,
          6,
          clp_lm_oc.tub_fid,
          null,
@@ -910,8 +1085,10 @@ create or replace package body EAM_EPM is
                                    4 --Nodo Primario
                                   when t.g3e_fno = 14100 then
                                    5 --Tuberia Primaria
+                                  when t.g3e_fno = 14200 then
+                                   6 --Valvulas
                                   else
-                                   6 --Otros
+                                   7 --Otros
                                 end) loop
       
         if elTrace.g3e_fno = 14400 then
@@ -1049,6 +1226,71 @@ create or replace package body EAM_EPM is
           end if;
         end if;
       
+        if elTrace.g3e_fno = 14200 then
+          --Valvula
+        
+          --Linea Primaria, Estación Valvula Derivación
+          select codigo_valvula
+            into codigo
+            from cconectividad_g
+           where g3e_fid = elTrace.g3e_fid
+             and g3e_fno = elTrace.g3e_fno;
+        
+          insert into eam_activos_temp
+          values
+            (vRegionLineaPrimaria,
+             vClaseEstacionDerivacion,
+             elTrace.g3e_fid,
+             elTrace.g3e_fno,
+             'EVD-' || codigo,
+             case EAM_ESMETROPOLITANA(elTrace.g3e_fid, elTrace.g3e_fno) when 1 then
+             vSistemasValvulasRedM when 0 then vSistemasValvulasRedRegA end,
+             6,
+             null,
+             null,
+             null,
+             0,
+             0,
+             sysdate);
+        
+          -- Linea Primaria, Estación Valvula Derivación, Valvula Derivacion
+          insert into eam_activos_temp
+          values
+            (vRegionLineaPrimaria,
+             vClaseValvulaDerivacion,
+             elTrace.g3e_fid,
+             elTrace.g3e_fno,
+             null,
+             case EAM_ESMETROPOLITANA(elTrace.g3e_fid, elTrace.g3e_fno) when 1 then
+             vSistemasValvulasRedM when 0 then vSistemasValvulasRedRegA end,
+             7,
+             elTrace.g3e_fid,
+             'EVD-' || codigo,
+             null,
+             0,
+             0,
+             sysdate);
+        
+          --Linea Primaria, Estación Valvula Derivación, Obra Civil Derivacion
+          insert into eam_activos_temp
+          values
+            (vRegionLineaPrimaria,
+             vClaseObraCivilDerivacion,
+             elTrace.g3e_fid,
+             elTrace.g3e_fno,
+             null,
+             case EAM_ESMETROPOLITANA(elTrace.g3e_fid, elTrace.g3e_fno) when 1 then
+             vSistemasValvulasRedM when 0 then vSistemasValvulasRedRegA end,
+             7,
+             elTrace.g3e_fid,
+             'EVD-' || codigo,
+             null,
+             0,
+             0,
+             sysdate);
+          commit;
+        end if;
+      
         if elTrace.g3e_fno = 14100 then
           --Tuberia Primaria
           if codigo is null then
@@ -1066,15 +1308,19 @@ create or replace package body EAM_EPM is
               exit;
             end if;
           
-            codigo := 'RML-' || vRamalFid;
+            select 'RAM-' || ora_hash(cRamal.tipo_nombre, 88888888)
+              into codigo
+              from dual;
           
             insert into eam_activos_temp
             values
-              (vClaseRamal,
+              (cRamal.tipo_nombre,
+               vClaseRamal,
                vRamalFid,
                vRamalFno,
                codigo,
-               vUbicacionRamal,
+               case EAM_ESMETROPOLITANA(vRamalFid, vRamalFno) when 1 then
+               vRamalesRedM when 0 then vRamalesRedRegA end, --vUbicacionRamal,
                6,
                null,
                null,
@@ -1082,29 +1328,18 @@ create or replace package body EAM_EPM is
                0,
                0,
                sysdate);
-          
-            --Aprovechar y generar la ubicación del circuito
-            insert into eam_ubicacion_temp
-            values
-              (vClaseCircuito,
-               vRamalFid,
-               vRamalFno,
-               cRamal.Tipo_Nombre,
-               'CIR-' || cRamal.Tipo_Nombre,
-               5,
-               vSuperiorCircuito,
-               null,
-               sysdate);
             commit;
           end if;
         
           insert into eam_activos_temp
           values
-            (vClaseTuberiaRamal,
+            (cRamal.Tipo_Nombre,
+             vClaseTuberiaRamal,
              elTrace.g3e_fid,
              elTrace.g3e_fno,
              null,
-             vUbicacionRamal,
+             case EAM_ESMETROPOLITANA(elTrace.g3e_fid, elTrace.g3e_fno) when 1 then
+             vRamalesRedM when 0 then vRamalesRedRegA end, --vUbicacionRamal,
              7,
              vRamalFid,
              codigo,
@@ -1113,6 +1348,7 @@ create or replace package body EAM_EPM is
              0,
              sysdate);
           commit;
+        
         end if;
       
       end loop;
@@ -1122,14 +1358,21 @@ create or replace package body EAM_EPM is
     for clp_rm_oc in lp_rm_oc loop
       insert into eam_activos_temp
       values
-        (vClaseObraCivilRamal,
+        (clp_rm_oc.ramal,
+         vClaseObraCivilRamal,
          clp_rm_oc.fid_protec,
          clp_rm_oc.fno_protec,
-         'RML-' || clp_rm_oc.ramal,
-         vUbicacionRamal,
+         null,
+         case
+          EAM_ESMETROPOLITANA(clp_rm_oc.fid_protec, clp_rm_oc.fno_protec)
+           when 1 then
+            vRamalesRedM
+           when 0 then
+            vRamalesRedRegA
+         end, --vUbicacionRamal,
          7,
          clp_rm_oc.tub_fid,
-         null,
+         'RAM-' || ora_hash(clp_rm_oc.ramal, 88888888),
          null,
          0,
          0,
@@ -1137,20 +1380,246 @@ create or replace package body EAM_EPM is
     end loop;
     commit;
   
+    --Linea Primaria, Protección Catódica
+    for elp_proteccion in lp_proteccion loop
+      case elp_proteccion.tipo_proteccion_activa
+        when 'RECTIFICADOR DE CORRIENTE' then
+        
+          insert into eam_activos_temp
+          values
+            (vRegionLineaPrimaria,
+             vClaseUnidadRectificadora,
+             elp_proteccion.g3e_fid,
+             elp_proteccion.g3e_fno,
+             'URT-' || elp_proteccion.g3e_fid,
+             case EAM_ESMETROPOLITANA(elp_proteccion.g3e_fid,
+                                  elp_proteccion.g3e_fno)
+               when 1 then
+                vProteccionCatodiaRedM
+               when 0 then
+                vProteccionCatodiaRedRegA
+             end,
+             6,
+             null,
+             null,
+             null,
+             0,
+             0,
+             sysdate);
+        
+          insert into eam_activos_temp
+          values
+            (vRegionLineaPrimaria,
+             vClaseRectificador,
+             elp_proteccion.g3e_fid,
+             elp_proteccion.g3e_fno,
+             null,
+             case EAM_ESMETROPOLITANA(elp_proteccion.g3e_fid,
+                                  elp_proteccion.g3e_fno)
+               when 1 then
+                vProteccionCatodiaRedM
+               when 0 then
+                vProteccionCatodiaRedRegA
+             end,
+             7,
+             null,
+             null,
+             null,
+             0,
+             0,
+             sysdate);
+        
+          insert into eam_activos_temp
+          values
+            (vRegionLineaPrimaria,
+             vClaseObraCivilRectificador,
+             elp_proteccion.g3e_fid,
+             elp_proteccion.g3e_fno,
+             null,
+             case EAM_ESMETROPOLITANA(elp_proteccion.g3e_fid,
+                                 elp_proteccion.g3e_fno) when 1 then
+             vProteccionCatodiaRedM when 0 then vProteccionCatodiaRedRegA end,
+             7,
+             null,
+             null,
+             null,
+             0,
+             0,
+             sysdate);
+          commit;
+        when 'PEDESTAL DE MONITOREO TIPO 2' then
+        
+          insert into eam_activos_temp
+          values
+            (vRegionLineaPrimaria,
+             vClasePedestalMonitoreo,
+             elp_proteccion.g3e_fid,
+             elp_proteccion.g3e_fno,
+             'PDM-' || elp_proteccion.g3e_fid,
+             case EAM_ESMETROPOLITANA(elp_proteccion.g3e_fid,
+                                  elp_proteccion.g3e_fno)
+               when 1 then
+                vProteccionCatodiaRedM
+               when 0 then
+                vProteccionCatodiaRedRegA
+             end,
+             6,
+             null,
+             null,
+             null,
+             0,
+             0,
+             sysdate);
+          commit;
+        
+        when 'PEDESTAL DE MONITOREO TIPO 4' then
+        
+          insert into eam_activos_temp
+          values
+            (vRegionLineaPrimaria,
+             vClasePedestalMonitoreo,
+             elp_proteccion.g3e_fid,
+             elp_proteccion.g3e_fno,
+             'PDM-' || elp_proteccion.g3e_fid,
+             case EAM_ESMETROPOLITANA(elp_proteccion.g3e_fid,
+                                  elp_proteccion.g3e_fno)
+               when 1 then
+                vProteccionCatodiaRedM
+               when 0 then
+                vProteccionCatodiaRedRegA
+             end,
+             6,
+             null,
+             null,
+             null,
+             0,
+             0,
+             sysdate);
+          commit;
+      end case;
+    
+    end loop;
+  
+    --Linea Primaria, Unidad de Aislamiento
+    for elp_uni_aisla in lp_uni_aisla loop
+    
+      insert into eam_activos_temp
+      values
+        (vRegionLineaPrimaria,
+         vClaseUnidadAislamiento,
+         elp_uni_aisla.g3e_fid,
+         elp_uni_aisla.g3e_fno,
+         'UAI-' || elp_uni_aisla.g3e_fid,
+         case
+          EAM_ESMETROPOLITANA(elp_uni_aisla.g3e_fid, elp_uni_aisla.g3e_fno)
+           when 1 then
+            vProteccionCatodiaRedM
+           when 0 then
+            vProteccionCatodiaRedRegA
+         end,
+         6,
+         null,
+         null,
+         null,
+         0,
+         0,
+         sysdate);
+      commit;
+    end loop;
+  
+    --Linea Primaria, Celda Kirk
+    for elp_celda in lp_celda loop
+    
+      insert into eam_activos_temp
+      values
+        (vRegionLineaPrimaria,
+         vClaseCeldaKirk,
+         elp_celda.g3e_fid,
+         elp_celda.g3e_fno,
+         null,
+         case EAM_ESMETROPOLITANA(elp_celda.g3e_fid, elp_celda.g3e_fno)
+           when 1 then
+            vCeldasKirkRedM
+           when 0 then
+            vCeldasKirkRedRegA
+         end,
+         6,
+         null,
+         null,
+         null,
+         0,
+         0,
+         sysdate);
+      commit;
+    end loop;
+  
+    -- Circuitos con más de un regulador
+    insert into eam_errors
+      select cn.nombre_circuito,
+             cn.g3e_fid,
+             cn.g3e_fno,
+             sysdate,
+             'El Circuito tiene más de uno regulador'
+        from cconectividad_g cn
+       inner join ccomun cm
+          on cm.g3e_fid = cn.g3e_fid
+         and cm.g3e_fno = cn.G3E_FNO
+       where cn.g3e_fno = 14400
+         and cm.ESTADO != 'RETIRADO'
+         and cn.NOMBRE_CIRCUITO in (
+                                    
+                                    select cn.nombre_circuito
+                                      from cconectividad_g cn
+                                     inner join ccomun cm
+                                        on cm.g3e_fid = cn.g3e_fid
+                                       and cm.g3e_fno = cn.G3E_FNO
+                                     where cn.g3e_fno = 14400
+                                       and cm.ESTADO != 'RETIRADO'
+                                     group by cn.NOMBRE_CIRCUITO
+                                    having count(1) > 1);
+    commit;
+  
+    --Circuitos
+    for circuito in circuitos loop
+      insert into eam_ubicacion_temp
+      values
+        (vClaseCircuito,
+         circuito.g3e_fid,
+         circuito.g3e_fno,
+         case EAM_ESMETROPOLITANA(circuito.g3e_fid, circuito.g3e_fno)
+           when 1 then
+            'CIV-' || ora_hash(circuito.nombre_circuito, 99999999)
+           when 0 then
+            'CIR-' || ora_hash(circuito.nombre_circuito, 99999999)
+         end,
+         case EAM_ESMETROPOLITANA(circuito.g3e_fid, circuito.g3e_fno)
+           when 1 then
+            vRamalesRedM
+           when 0 then
+            vRamalesRedRegA
+         end,
+         5,
+         vSuperiorCircuito,
+         'CIRCUITO ' || circuito.nombre_circuito,
+         sysdate);
+    end loop;
+  
     --Linea Secundaria, Activos
     for circuito in (select * from eam_ubicacion_temp) loop
     
       --Arteria
       insert into eam_activos_temp
       values
-        (vClaseArteria,
+        (substr(circuito.descripcion, 10),
+         vClaseArteria,
          circuito.g3e_fid,
          circuito.g3e_fno,
-         'ART-' || circuito.codigo,
-         circuito.codigo_ubicacion,
+         'ART-' || substr(circuito.codigo, 5),
+         case EAM_ESMETROPOLITANA(circuito.g3e_fid, circuito.g3e_fno) when 1 then
+         vLineaSecundariaRedM when 0 then vLineaSecundariaRedRegA end,
          6,
-         null,
-         null,
+         circuito.g3e_fid,
+         circuito.codigo,
          null,
          0,
          0,
@@ -1160,17 +1629,20 @@ create or replace package body EAM_EPM is
       for activo in (select g3e_fid, g3e_fno
                        from cconectividad_g
                       where g3e_fno = 14700
-                        and nombre_circuito = circuito.codigo) loop
+                        and nombre_circuito =
+                            substr(circuito.descripcion, 10)) loop
         insert into eam_activos_temp
         values
-          (vClasePolivalvulaArteria,
+          (substr(circuito.descripcion, 10),
+           vClasePolivalvulaArteria,
            activo.g3e_fid,
            activo.g3e_fno,
            null,
-           circuito.codigo_ubicacion,
+           case EAM_ESMETROPOLITANA(activo.g3e_fid, activo.g3e_fno) when 1 then
+           vLineaSecundariaRedM when 0 then vLineaSecundariaRedRegA end,
            7,
            circuito.g3e_fid,
-           'ART-' || circuito.codigo,
+           'ART-' || substr(circuito.codigo, 5),
            null,
            0,
            0,
@@ -1182,17 +1654,20 @@ create or replace package body EAM_EPM is
       for activo in (select g3e_fid, g3e_fno
                        from cconectividad_g
                       where g3e_fno = 14600
-                        and nombre_circuito = circuito.codigo) loop
+                        and nombre_circuito =
+                            substr(circuito.descripcion, 10)) loop
         insert into eam_activos_temp
         values
-          (vClaseTuberiaArteria,
+          (substr(circuito.descripcion, 10),
+           vClaseTuberiaArteria,
            activo.g3e_fid,
            activo.g3e_fno,
            null,
-           circuito.codigo_ubicacion,
+           case EAM_ESMETROPOLITANA(activo.g3e_fid, activo.g3e_fno) when 1 then
+           vLineaSecundariaRedM when 0 then vLineaSecundariaRedRegA end,
            7,
            circuito.g3e_fid,
-           'ART-' || circuito.codigo,
+           'ART-' || substr(circuito.codigo, 5),
            null,
            0,
            0,
@@ -1201,17 +1676,23 @@ create or replace package body EAM_EPM is
       commit;
     
       --Obra Civil Arteria
-      for activo in ls_ar_oc(circuito.codigo) loop
+      for activo in ls_ar_oc(substr(circuito.descripcion, 10)) loop
         insert into eam_activos_temp
         values
-          (vClaseObraCivilArteria,
+          (substr(circuito.descripcion, 10),
+           vClaseObraCivilArteria,
            activo.fid_protec,
            activo.fno_protec,
            null,
-           circuito.codigo_ubicacion,
+           case EAM_ESMETROPOLITANA(activo.fid_protec, activo.fno_protec)
+             when 1 then
+              vLineaSecundariaRedM
+             when 0 then
+              vLineaSecundariaRedRegA
+           end,
            7,
            activo.fid_tuberia,
-           'ART-' || circuito.codigo,
+           'ART-' || substr(circuito.codigo, 5),
            null,
            0,
            0,
@@ -1224,17 +1705,20 @@ create or replace package body EAM_EPM is
       for activo in (select g3e_fid, g3e_fno, codigo_valvula
                        from cconectividad_g
                       where g3e_fno = 15100
-                        and nombre_circuito = circuito.codigo) loop
+                        and nombre_circuito =
+                            substr(circuito.descripcion, 10)) loop
         insert into eam_activos_temp
         values
-          (vClaseAnillo,
+          (substr(circuito.descripcion, 10),
+           vClaseAnillo,
            activo.g3e_fid,
            activo.g3e_fno,
-           activo.codigo_valvula || '-6',
-           circuito.codigo_ubicacion,
+           'ANI-' || activo.codigo_valvula,
+           case EAM_ESMETROPOLITANA(activo.g3e_fid, activo.g3e_fno) when 1 then
+           vLineaSecundariaRedM when 0 then vLineaSecundariaRedRegA end,
            6,
            circuito.g3e_fid,
-           null,
+           circuito.codigo,
            null,
            0,
            0,
@@ -1242,14 +1726,16 @@ create or replace package body EAM_EPM is
       
         insert into eam_activos_temp
         values
-          (vClasePolivalvulaAnillo,
+          (substr(circuito.descripcion, 10),
+           vClasePolivalvulaAnillo,
            activo.g3e_fid,
            activo.g3e_fno,
            null,
-           circuito.codigo_ubicacion,
+           case EAM_ESMETROPOLITANA(activo.g3e_fid, activo.g3e_fno) when 1 then
+           vLineaSecundariaRedM when 0 then vLineaSecundariaRedRegA end,
            7,
            circuito.g3e_fid,
-           activo.codigo_valvula || '-6',
+           'ANI-' || activo.codigo_valvula,
            null,
            0,
            0,
@@ -1261,17 +1747,20 @@ create or replace package body EAM_EPM is
       for activo in (select g3e_fid, g3e_fno, codigo_valvula
                        from cconectividad_g
                       where g3e_fno = 15000
-                        and nombre_circuito = circuito.codigo) loop
+                        and nombre_circuito =
+                            substr(circuito.descripcion, 10)) loop
         insert into eam_activos_temp
         values
-          (vClaseTuberiaAnillo,
+          (substr(circuito.descripcion, 10),
+           vClaseTuberiaAnillo,
            activo.g3e_fid,
            activo.g3e_fno,
            null,
-           circuito.codigo_ubicacion,
+           case EAM_ESMETROPOLITANA(activo.g3e_fid, activo.g3e_fno) when 1 then
+           vLineaSecundariaRedM when 0 then vLineaSecundariaRedRegA end,
            7,
            circuito.g3e_fid,
-           activo.codigo_valvula || '-6',
+           'ANI-' || activo.codigo_valvula,
            null,
            0,
            0,
@@ -1280,17 +1769,23 @@ create or replace package body EAM_EPM is
       commit;
     
       --Obra Civil Anillo
-      for activo in ls_an_oc(circuito.codigo) loop
+      for activo in ls_an_oc(substr(circuito.descripcion, 10)) loop
         insert into eam_activos_temp
         values
-          (vClaseObraCivilAnillo,
+          (substr(circuito.descripcion, 10),
+           vClaseObraCivilAnillo,
            activo.fid_protec,
            activo.fno_protec,
            null,
-           circuito.codigo_ubicacion,
+           case EAM_ESMETROPOLITANA(activo.fid_protec, activo.fno_protec)
+             when 1 then
+              vLineaSecundariaRedM
+             when 0 then
+              vLineaSecundariaRedRegA
+           end,
            7,
            activo.fid_tuberia,
-           activo.codigo_valvula || '-6',
+           'ANI-' || activo.codigo_valvula,
            null,
            0,
            0,
@@ -1335,7 +1830,8 @@ create or replace package body EAM_EPM is
         for eRet in (select * from eam_activos where g3e_fid = cRet.g3e_fid) loop
           insert into eam_activos_ret
           values
-            (eret.clase,
+            (eret.region,
+             eret.clase,
              eret.g3e_fid,
              eret.g3e_fno,
              eret.codigo_activo,
@@ -1462,6 +1958,40 @@ create or replace package body EAM_EPM is
     execute immediate 'CREATE TABLE EAM_ACTIVOS_RET_BKP AS SELECT * FROM EAM_ACTIVOS_RET';
     execute immediate 'CREATE TABLE EAM_UBICACION_BKP AS SELECT * FROM EAM_UBICACION';
   end;
+
+  function EAM_ESMETROPOLITANA(pFID IN NUMBER, pFNO in NUMBER) return NUMBER as
+    vMunID varchar2(50);
+    vCount number(2);
+  begin
+  
+    select municipio
+      into vMunID
+      from ccomun
+     where g3e_fid = pFID
+       and g3e_fno = pFNO;
+  
+    if vMunID is null then
+      insert into eam_errors
+      values
+        (null, pFid, pFno, sysdate, 'Elemento sin Municipio');
+      commit;
+      return 0;
+    end if;
+  
+    select count(1)
+      into vCount
+      from eam_config
+     where valor = vMunID
+       and descripcion = 'RedMetropolitanaMunId';
+  
+    return vCount;
+  
+  exception
+    when others then
+    
+      return 0;
+    
+  end EAM_ESMETROPOLITANA;
 
 end EAM_EPM;
 /
