@@ -187,7 +187,6 @@ insert into eam_config values('ClaseByPass','BY-PASS');
 insert into eam_config values('ClaseObraCivilMatriz','OBRA CIVIL MATRIZ');
 insert into eam_config values('ClaseRamal','RAMAL');
 insert into eam_config values('ClaseCircuito','CIRCUITO');
-insert into eam_config values('SuperiorCircuito','LINSEC');
 insert into eam_config values('ClaseTuberiaRamal','TUBERIA PRIMARIA');
 insert into eam_config values('ClaseObraCivilRamal','OBRA CIVIL RAMAL');
 insert into eam_config values('ClaseArteria','ARTERIA');

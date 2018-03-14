@@ -36,6 +36,12 @@ create or replace package EAM_EPM is
   -- 6.   Reglas de códigos de ubicación
   -- 7.   Nueva selección de los circuitos disponibles
   -- 8.   Inserción de la clase 'Estación Valvulas de Derivación'
+  
+  -- Correción
+  -- Version : 1.3.1
+  -- Author  : Lucas Turchet
+  -- Created : 14/03/18
+  -- 1.   Códigos de Ubicacion
 
   -- Busca los elementos de un Número de Tramo Específico
   function EAM_TRACETRAMOESPECIFICO(nrTramo IN NUMBER) return EAM_TRACE_TABLE;
@@ -532,7 +538,6 @@ create or replace package body EAM_EPM is
     vClaseObraCivilMatriz         VARCHAR2(100);
     vClaseRamal                   VARCHAR2(100);
     vClaseCircuito                VARCHAR2(100);
-    vSuperiorCircuito             VARCHAR2(100);
     vClaseTuberiaRamal            VARCHAR2(100);
     vClaseObraCivilRamal          VARCHAR2(100);
     vClaseArteria                 VARCHAR2(100);
@@ -717,10 +722,6 @@ create or replace package body EAM_EPM is
       into vClaseCircuito
       from eam_config
      where descripcion = 'ClaseCircuito';
-    select valor
-      into vSuperiorCircuito
-      from eam_config
-     where descripcion = 'SuperiorCircuito';
     select valor
       into vClaseTuberiaRamal
       from eam_config
@@ -1586,20 +1587,20 @@ create or replace package body EAM_EPM is
         (vClaseCircuito,
          circuito.g3e_fid,
          circuito.g3e_fno,
+         ora_hash(circuito.nombre_circuito, 99999999),
          case EAM_ESMETROPOLITANA(circuito.g3e_fid, circuito.g3e_fno)
            when 1 then
             'CIV-' || ora_hash(circuito.nombre_circuito, 99999999)
            when 0 then
             'CIR-' || ora_hash(circuito.nombre_circuito, 99999999)
          end,
+         5,
          case EAM_ESMETROPOLITANA(circuito.g3e_fid, circuito.g3e_fno)
            when 1 then
             vRamalesRedM
            when 0 then
             vRamalesRedRegA
          end,
-         5,
-         vSuperiorCircuito,
          'CIRCUITO ' || circuito.nombre_circuito,
          sysdate);
     end loop;
@@ -1614,7 +1615,7 @@ create or replace package body EAM_EPM is
          vClaseArteria,
          circuito.g3e_fid,
          circuito.g3e_fno,
-         'ART-' || substr(circuito.codigo, 5),
+         'ART-' || circuito.codigo,
          case EAM_ESMETROPOLITANA(circuito.g3e_fid, circuito.g3e_fno) when 1 then
          vLineaSecundariaRedM when 0 then vLineaSecundariaRedRegA end,
          6,
@@ -1642,7 +1643,7 @@ create or replace package body EAM_EPM is
            vLineaSecundariaRedM when 0 then vLineaSecundariaRedRegA end,
            7,
            circuito.g3e_fid,
-           'ART-' || substr(circuito.codigo, 5),
+           'ART-' || circuito.codigo,
            null,
            0,
            0,
@@ -1667,7 +1668,7 @@ create or replace package body EAM_EPM is
            vLineaSecundariaRedM when 0 then vLineaSecundariaRedRegA end,
            7,
            circuito.g3e_fid,
-           'ART-' || substr(circuito.codigo, 5),
+           'ART-' || circuito.codigo,
            null,
            0,
            0,
@@ -1692,7 +1693,7 @@ create or replace package body EAM_EPM is
            end,
            7,
            activo.fid_tuberia,
-           'ART-' || substr(circuito.codigo, 5),
+           'ART-' || circuito.codigo,
            null,
            0,
            0,
