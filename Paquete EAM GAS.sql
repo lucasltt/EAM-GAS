@@ -36,12 +36,19 @@ create or replace package EAM_EPM is
   -- 6.   Reglas de códigos de ubicación
   -- 7.   Nueva selección de los circuitos disponibles
   -- 8.   Inserción de la clase 'Estación Valvulas de Derivación'
-  
+
   -- Correción
   -- Version : 1.3.1
   -- Author  : Lucas Turchet
   -- Created : 14/03/18
   -- 1.   Códigos de Ubicacion
+
+  -- Correción
+  -- Version : 1.3.2
+  -- Author  : Lucas Turchet
+  -- Created : 15/03/18
+  -- 1.   Correcion Nivel Superior Ubicacion
+  -- 2.   Nueva columnas tablas de activos
 
   -- Busca los elementos de un Número de Tramo Específico
   function EAM_TRACETRAMOESPECIFICO(nrTramo IN NUMBER) return EAM_TRACE_TABLE;
@@ -878,7 +885,8 @@ create or replace package body EAM_EPM is
           
             insert into eam_activos_temp
             values
-              (vRegionLineaPrimaria,
+              ('MATRIZ',
+               vRegionLineaPrimaria,
                vClaseTramosMatriz,
                elTrace.g3e_fid,
                elTrace.g3e_fno,
@@ -929,7 +937,8 @@ create or replace package body EAM_EPM is
         
           insert into eam_activos_temp
           values
-            (vRegionLineaPrimaria,
+            ('MATRIZ',
+             vRegionLineaPrimaria,
              vClaseEstacionSeccionamiento,
              elTrace.g3e_fid,
              elTrace.g3e_fno,
@@ -946,7 +955,8 @@ create or replace package body EAM_EPM is
         
           insert into eam_activos_temp
           values
-            (vRegionLineaPrimaria,
+            ('MATRIZ',
+             vRegionLineaPrimaria,
              vClaseInstrumentacion,
              elTrace.g3e_fid,
              elTrace.g3e_fno,
@@ -963,7 +973,8 @@ create or replace package body EAM_EPM is
         
           insert into eam_activos_temp
           values
-            (vRegionLineaPrimaria,
+            ('MATRIZ',
+             vRegionLineaPrimaria,
              vClaseObraCivilSeccionamiento,
              elTrace.g3e_fid,
              elTrace.g3e_fno,
@@ -1000,7 +1011,8 @@ create or replace package body EAM_EPM is
             
               insert into eam_activos_temp
               values
-                (vRegionLineaPrimaria,
+                ('MATRIZ',
+                 vRegionLineaPrimaria,
                  vClaseByPass,
                  bypass.g3e_fid,
                  bypass.g3e_fno,
@@ -1032,7 +1044,8 @@ create or replace package body EAM_EPM is
     for clp_lm_oc in lp_lm_oc loop
       insert into eam_activos_temp
       values
-        (vRegionLineaPrimaria,
+        ('MATRIZ',
+         vRegionLineaPrimaria,
          vClaseObraCivilMatriz,
          clp_lm_oc.fid_protec,
          clp_lm_oc.fno_protec,
@@ -1239,7 +1252,8 @@ create or replace package body EAM_EPM is
         
           insert into eam_activos_temp
           values
-            (vRegionLineaPrimaria,
+            ('MATRIZ',
+             vRegionLineaPrimaria,
              vClaseEstacionDerivacion,
              elTrace.g3e_fid,
              elTrace.g3e_fno,
@@ -1257,7 +1271,8 @@ create or replace package body EAM_EPM is
           -- Linea Primaria, Estación Valvula Derivación, Valvula Derivacion
           insert into eam_activos_temp
           values
-            (vRegionLineaPrimaria,
+            ('MATRIZ',
+             vRegionLineaPrimaria,
              vClaseValvulaDerivacion,
              elTrace.g3e_fid,
              elTrace.g3e_fno,
@@ -1275,7 +1290,8 @@ create or replace package body EAM_EPM is
           --Linea Primaria, Estación Valvula Derivación, Obra Civil Derivacion
           insert into eam_activos_temp
           values
-            (vRegionLineaPrimaria,
+            ('MATRIZ',
+             vRegionLineaPrimaria,
              vClaseObraCivilDerivacion,
              elTrace.g3e_fid,
              elTrace.g3e_fno,
@@ -1315,7 +1331,8 @@ create or replace package body EAM_EPM is
           
             insert into eam_activos_temp
             values
-              (cRamal.tipo_nombre,
+              ('RAMAL',
+               cRamal.tipo_nombre,
                vClaseRamal,
                vRamalFid,
                vRamalFno,
@@ -1334,7 +1351,8 @@ create or replace package body EAM_EPM is
         
           insert into eam_activos_temp
           values
-            (cRamal.Tipo_Nombre,
+            ('RAMAL',
+             cRamal.Tipo_Nombre,
              vClaseTuberiaRamal,
              elTrace.g3e_fid,
              elTrace.g3e_fno,
@@ -1359,7 +1377,8 @@ create or replace package body EAM_EPM is
     for clp_rm_oc in lp_rm_oc loop
       insert into eam_activos_temp
       values
-        (clp_rm_oc.ramal,
+        ('RAMAL',
+         clp_rm_oc.ramal,
          vClaseObraCivilRamal,
          clp_rm_oc.fid_protec,
          clp_rm_oc.fno_protec,
@@ -1388,7 +1407,8 @@ create or replace package body EAM_EPM is
         
           insert into eam_activos_temp
           values
-            (vRegionLineaPrimaria,
+            ('MATRIZ',
+             vRegionLineaPrimaria,
              vClaseUnidadRectificadora,
              elp_proteccion.g3e_fid,
              elp_proteccion.g3e_fno,
@@ -1410,7 +1430,8 @@ create or replace package body EAM_EPM is
         
           insert into eam_activos_temp
           values
-            (vRegionLineaPrimaria,
+            ('MATRIZ',
+             vRegionLineaPrimaria,
              vClaseRectificador,
              elp_proteccion.g3e_fid,
              elp_proteccion.g3e_fno,
@@ -1432,7 +1453,8 @@ create or replace package body EAM_EPM is
         
           insert into eam_activos_temp
           values
-            (vRegionLineaPrimaria,
+            ('MATRIZ',
+             vRegionLineaPrimaria,
              vClaseObraCivilRectificador,
              elp_proteccion.g3e_fid,
              elp_proteccion.g3e_fno,
@@ -1452,7 +1474,8 @@ create or replace package body EAM_EPM is
         
           insert into eam_activos_temp
           values
-            (vRegionLineaPrimaria,
+            ('MATRIZ',
+             vRegionLineaPrimaria,
              vClasePedestalMonitoreo,
              elp_proteccion.g3e_fid,
              elp_proteccion.g3e_fno,
@@ -1477,7 +1500,8 @@ create or replace package body EAM_EPM is
         
           insert into eam_activos_temp
           values
-            (vRegionLineaPrimaria,
+            ('MATRIZ',
+             vRegionLineaPrimaria,
              vClasePedestalMonitoreo,
              elp_proteccion.g3e_fid,
              elp_proteccion.g3e_fno,
@@ -1506,7 +1530,8 @@ create or replace package body EAM_EPM is
     
       insert into eam_activos_temp
       values
-        (vRegionLineaPrimaria,
+        ('MATRIZ',
+         vRegionLineaPrimaria,
          vClaseUnidadAislamiento,
          elp_uni_aisla.g3e_fid,
          elp_uni_aisla.g3e_fno,
@@ -1533,7 +1558,8 @@ create or replace package body EAM_EPM is
     
       insert into eam_activos_temp
       values
-        (vRegionLineaPrimaria,
+        ('MATRIZ',
+         vRegionLineaPrimaria,
          vClaseCeldaKirk,
          elp_celda.g3e_fid,
          elp_celda.g3e_fno,
@@ -1597,9 +1623,9 @@ create or replace package body EAM_EPM is
          5,
          case EAM_ESMETROPOLITANA(circuito.g3e_fid, circuito.g3e_fno)
            when 1 then
-            vRamalesRedM
+            vLineaSecundariaRedM
            when 0 then
-            vRamalesRedRegA
+            vLineaSecundariaRedRegA
          end,
          'CIRCUITO ' || circuito.nombre_circuito,
          sysdate);
@@ -1611,7 +1637,8 @@ create or replace package body EAM_EPM is
       --Arteria
       insert into eam_activos_temp
       values
-        (substr(circuito.descripcion, 10),
+        ('CIRCUITO',
+         substr(circuito.descripcion, 10),
          vClaseArteria,
          circuito.g3e_fid,
          circuito.g3e_fno,
@@ -1634,7 +1661,8 @@ create or replace package body EAM_EPM is
                             substr(circuito.descripcion, 10)) loop
         insert into eam_activos_temp
         values
-          (substr(circuito.descripcion, 10),
+          ('CIRCUITO',
+           substr(circuito.descripcion, 10),
            vClasePolivalvulaArteria,
            activo.g3e_fid,
            activo.g3e_fno,
@@ -1659,7 +1687,8 @@ create or replace package body EAM_EPM is
                             substr(circuito.descripcion, 10)) loop
         insert into eam_activos_temp
         values
-          (substr(circuito.descripcion, 10),
+          ('CIRCUITO',
+           substr(circuito.descripcion, 10),
            vClaseTuberiaArteria,
            activo.g3e_fid,
            activo.g3e_fno,
@@ -1680,7 +1709,8 @@ create or replace package body EAM_EPM is
       for activo in ls_ar_oc(substr(circuito.descripcion, 10)) loop
         insert into eam_activos_temp
         values
-          (substr(circuito.descripcion, 10),
+          ('CIRCUITO',
+           substr(circuito.descripcion, 10),
            vClaseObraCivilArteria,
            activo.fid_protec,
            activo.fno_protec,
@@ -1710,7 +1740,8 @@ create or replace package body EAM_EPM is
                             substr(circuito.descripcion, 10)) loop
         insert into eam_activos_temp
         values
-          (substr(circuito.descripcion, 10),
+          ('CIRCUITO',
+           substr(circuito.descripcion, 10),
            vClaseAnillo,
            activo.g3e_fid,
            activo.g3e_fno,
@@ -1727,7 +1758,8 @@ create or replace package body EAM_EPM is
       
         insert into eam_activos_temp
         values
-          (substr(circuito.descripcion, 10),
+          ('CIRCUITO',
+           substr(circuito.descripcion, 10),
            vClasePolivalvulaAnillo,
            activo.g3e_fid,
            activo.g3e_fno,
@@ -1752,7 +1784,8 @@ create or replace package body EAM_EPM is
                             substr(circuito.descripcion, 10)) loop
         insert into eam_activos_temp
         values
-          (substr(circuito.descripcion, 10),
+          ('CIRCUITO',
+           substr(circuito.descripcion, 10),
            vClaseTuberiaAnillo,
            activo.g3e_fid,
            activo.g3e_fno,
@@ -1773,7 +1806,8 @@ create or replace package body EAM_EPM is
       for activo in ls_an_oc(substr(circuito.descripcion, 10)) loop
         insert into eam_activos_temp
         values
-          (substr(circuito.descripcion, 10),
+          ('CIRCUITO',
+           substr(circuito.descripcion, 10),
            vClaseObraCivilAnillo,
            activo.fid_protec,
            activo.fno_protec,
@@ -1831,7 +1865,8 @@ create or replace package body EAM_EPM is
         for eRet in (select * from eam_activos where g3e_fid = cRet.g3e_fid) loop
           insert into eam_activos_ret
           values
-            (eret.region,
+            (eret.tipo_red,
+             eret.nombre_red,
              eret.clase,
              eret.g3e_fid,
              eret.g3e_fno,

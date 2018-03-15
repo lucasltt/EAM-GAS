@@ -1,7 +1,8 @@
 DROP TABLE EAM_ACTIVOS;
 CREATE TABLE EAM_ACTIVOS
 (
-  REGION         VARCHAR2(100),  
+  TIPO_RED       VARCHAR2(100),
+  NOMBRE_RED     VARCHAR2(100),  
   CLASE          VARCHAR2(50),
   G3E_FID        NUMBER(10),
   G3E_FNO        NUMBER(10),
@@ -17,9 +18,11 @@ CREATE TABLE EAM_ACTIVOS
 );
 
 
+comment on column EAM_ACTIVOS.TIPO_RED
+is 'Tipo de la RED (Matriz, Ramal u Circuito)';
 
-comment on column EAM_ACTIVOS.REGION
-is 'Nombre de la region (circuito, ramal u linea primaria)';
+comment on column EAM_ACTIVOS.NOMBRE_RED
+is 'Nombre de la RED (circuito, ramal u linea primaria)';
 
 comment on column EAM_ACTIVOS.CLASE
 is 'Nombre de la clase del activo (nivel 6 u 7)';
@@ -63,7 +66,8 @@ is 'Descripcion del activo';
 DROP TABLE EAM_ACTIVOS_TEMP;
 CREATE TABLE EAM_ACTIVOS_TEMP
 (
-  REGION         VARCHAR2(100), 
+  TIPO_RED       VARCHAR2(100),
+  NOMBRE_RED     VARCHAR2(100), 
   CLASE          VARCHAR2(50),
   G3E_FID        NUMBER(10),
   G3E_FNO        NUMBER(10),
@@ -81,7 +85,8 @@ CREATE TABLE EAM_ACTIVOS_TEMP
 DROP TABLE EAM_ACTIVOS_RET;
 CREATE TABLE EAM_ACTIVOS_RET
 (
-  REGION         VARCHAR2(100), 
+  TIPO_RED       VARCHAR2(100),
+  NOMBRE_RED     VARCHAR2(100), 
   CLASE          VARCHAR2(50),
   G3E_FID        NUMBER(10),
   G3E_FNO        NUMBER(10),
