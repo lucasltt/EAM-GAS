@@ -1,0 +1,321 @@
+||EAM_ESMETROPOLITANA||;
+
+Busca el elemento en la tabla Comun;
+vCodMun = Codigo del Municipio;
+
+if vCodMun está configurado en la tabla EAM_CONFIG como 'RedMetropolitanaMunId')
+return true;
+else
+return false;
+
+----------------------------------------------------------------------------------------
+
+||EAM_RESPALDAR_TABLAS||;
+
+Respalda la tabla EAM_ACTIVOS para EAM_ACTIVOS_BKP;
+Respalda la tabla EAM_ACTIVOS_RET para EAM_ACTIVOS_RET_BKP;
+Respalda la tabla EAM_UBICACION para EAM_UBICACION_BKP;
+Fin;
+
+---------------------------------------------------------------------------------------
+
+||EAM_LIMPIAR_TABLAS||;
+
+Limpia la tabla EAM_ACTIVOS;
+Limpia la tabla EAM_ACTIVOS_RET;
+Limpia la tabla EAM_UBICACION;
+Fin;
+-------------------------------------------------------------------------------------
+
+||EAM_TRACETRAMOESPECIFICO (NUM_TRAMO)||;
+
+Valvula:
+Para cada Valvula configurada en la tabla EAM_CONFIG;
+
+(TraceResult = call EAM_TRACETRAMOS(valvula));
+
+if(TraceResult == NUM_TRAMO)
+return TraceResult;
+else
+loop Valvula;
+
+--------------------------------------------------------------------------------------
+
+||EAM_TRACETRAMOS (ELEMENTO)||;
+
+if (ELEMENTO = Valvula de Corte)
+return TraceResult;
+
+Nodo1:
+block Nodo1{
+Para ENodo1 = Elemento Conectado al Nodo1;
+if(ENodo1 == Tuberia Primaria and ENodo1.Tipo != 'MATRIZ')
+continue;
+else
+TraceResult += call EAM_TRACETRAMOS(ENodo1);
+if(Hay más elementos en nodo1)
+loop Nodo1;
+}
+
+Nodo2:
+block Nodo2{
+Para ENodo2 = Elemento Conectado al Nodo1;
+if(ENodo2 == Tuberia Primaria and ENodo1.Tipo != 'MATRIZ')
+continue;
+else
+TraceResult += call EAM_TRACETRAMOS(ENodo2);
+if(Hay más elementos en nodo1)
+loop Nodo2;
+}
+
+
+return TraceResult;
+
+-----------------------------------------------------------------------------
+
+||EAM_TRACERAMALES (ELEMENTO)||;
+
+if (ELEMENTO = Valvula de Corte)
+return TraceResult;
+
+Nodo1:
+block Nodo1{
+Para ENodo1 = Elemento Conectado al Nodo1;
+if(ENodo1 == Tuberia Primaria and ENodo1.Tipo != 'RAMAL')
+continue;
+elseif (ENodo1 in (14100, 14200, 14400, 14100, 14000, 14300, 16200, 16300, 15600))
+continue;
+else
+TraceResult += call EAM_TRACERAMALES(ENodo1);
+if(Hay más elementos en nodo1)
+loop Nodo1;
+}
+
+Nodo2:
+block Nodo2{
+Para ENodo2 = Elemento Conectado al Nodo1;
+if(ENodo2 == Tuberia Primaria and ENodo1.Tipo != 'RAMAL')
+continue;
+elseif (ENodo1 in (14100, 14200, 14400, 14100, 14000, 14300, 16200, 16300, 15600))
+continue;
+else
+TraceResult += call EAM_TRACERAMALES(ENodo2);
+if(Hay más elementos en nodo1)
+loop Nodo2;
+}
+
+
+return TraceResult;
+---------------------------------------------------------------------------------------------------
+||EAM_TAXONOMIA||;
+
+Cargar configuraciones desde la tabla EAM_CONFIG;
+
+block Tramos{
+Tramos:
+Para cada Tramo;
+TraceResult = call EAM_TRACETRAMOESPECIFICO(NUM_TRAMO);
+  Trace1:
+Para cada Elemento del Trace;
+
+block Linea Matriz{
+if(g3e_fno = 14100)
+<Tramos>;
+}
+
+block Estación Valvula Seccionamiento{
+if(g3e_fno = 14200)
+{
+<Estación Valvula Seccionamiento>;
+<Instrumentación y Control>;
+<Obra Civil>;
+if(Es ByPass)
+<ByPass>;
+}
+}
+
+
+if(Hay más Elemento en el Trace)
+loop Trace1;
+}
+
+
+if(Hay más Tramos)
+loop Tramos;
+
+
+call EAM_TAXONOMIA_1
+-----------------------------------------------------------------------------------------------------------
+||EAM_TAXONOMIA_1||;
+
+block Linea Matriz{
+<Obra Civil>
+}
+
+block Ramales{
+Tramos:
+Para cada Ramal;
+TraceResult = call EAM_TRACERAMAL(NOMBRE_RAMAL);
+  Trace1:
+Para cada Elemento del Trace;
+
+
+block Mirar Padre del Ramal{
+if(g3e_fno in(14000,14100,14400,5600,16300))
+Calcular el padre del Ramal;
+}
+
+
+block Estación Valvula Derivacion{
+if(g3e_fno = 14200)
+{
+<Estación Valvula Derivacion>;
+<Valvula de Derivacion>;
+}
+}
+
+block Tuberias{
+if(g3e_fno = 14100)
+{
+<Ramales>;
+<Tuberias>;
+}
+}
+
+
+
+
+if(Hay más Elemento en el Trace)
+loop Trace1;
+}
+
+
+if(Hay más Tramos)
+loop Tramos;
+
+
+call EAM_TAXONOMIA_2
+---------------------------------------------------------------------------------------------------
+||EAM_TAXONOMIA_2||;
+
+block Ramales{
+<Obra Civil>
+}
+
+block Protección Catodica{
+
+  Trace1:
+Para cada Elemento de Proteccion;
+
+switch(Tipo)
+{
+  case RECTIFICADOR DE CORRIENTE:
+  <Unidad Rectificadora>;
+  <Recitifcador>;
+  <Obra Civil Retificador>;
+  break;
+  case PEDESTAL DE MONITOREO TIPO 2:
+  case PEDESTAL DE MONITOREO TIPO 4:
+  <Pedestal Monitoreo>;
+  break;
+}
+
+if(Hay más Elementos)
+loop Trace1;
+
+<Unidad de Ailsamento>;
+
+
+}
+
+<Celda Kirk>;
+
+(Verifica circuitos con más de un Regulador e insertar errores);
+
+(Inserta ubicaciones de Circuitos);
+
+call EAM_TAXONOMIA_3
+----------------------------------------------------------------------------------------
+||EAM_TAXONOMIA_3||;
+
+
+block Circuitos{
+
+  Trace1:
+Para cada Circuito;
+
+<Arteria>;
+
+(Buscar Polivalvulas Arteria);
+<Polivalvula Arteria>;
+
+(Buscar Tuberia Arteria);
+<Tuberia Arteria>;
+
+(Buscar Obra Civil Arteria);
+<Obra Civil Arteria>;
+
+(Buscar Anillo y Polivalvula Anillo);
+<Anillo>;
+<Polivalvula Anillo>
+
+(Buscar Tuberia Anillo);
+<Tuberia Arteria>;
+
+(Buscar Obra Civil Anillo);
+<Obra Civil Arteria>;
+
+
+if(Hay más Circuitos)
+loop Trace1;
+}
+
+call EAM_TAXONOMIA_4;
+
+
+---------------------------------------------------------------------------------------------
+
+||EAM_TAXONOMIA_4||;
+
+(Actualizar Fecha de Ejecucion Activos);
+(Actualizar Fecha de Ejecucion Ubicacion);
+
+(Remover Activos Retirados);
+
+(Elementos que estaban en la ejecucion anterior y no estan más en esta ejecución fueron retirados);
+ <Insertar en la tabla EAM_ACTIVOS_RET>;
+
+(Buscar los activos que no tuvieron cambios);
+<Volver a la fecha de Ejecucion vieja>;
+
+(Buscar las ubicaciones que no tuvieron cambios);
+<Volver a la fecha de Ejecucion vieja>;
+
+Fin Taxonomia;
+-----------------------------------------------------------------------
+
+\EAM_EPM/;
+//Hace el trace basado en las reglas de tramos
+||EAM_TRACETRAMOS||;
+
+//Busca los elementos de un Número de Tramo Específico
+||EAM_TRACETRAMOESPECIFICO||;
+
+//Hace el trace basado en las reglas de Ramales
+||EAM_TRACERAMALES||;
+
+// Ejecuta toda la taxonima de GAS
+||EAM_TAXONOMIA||;
+
+//Mira si el activo pertenence a la Red Metropolitana
+||EAM_ESMETROPOLITANA||;
+
+//Crea tablas respaldo de las tablas
+||EAM_RESPALDAR_TABLAS||;
+
+//Limpa el contenido de las tablas
+||EAM_LIMPIAR_TABLAS||;
+
+
+
+

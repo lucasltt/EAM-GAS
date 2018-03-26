@@ -49,6 +49,13 @@ create or replace package EAM_EPM is
   -- Created : 15/03/18
   -- 1.   Correcion Nivel Superior Ubicacion
   -- 2.   Nueva columnas tablas de activos
+  
+  -- Correción
+  -- Version : 1.3.3
+  -- Author  : Lucas Turchet
+  -- Created : 23/03/18
+  -- 1.   Correcion Activos de nivel 7  con nivel superior nulo
+  -- 2.   Correcion Válvulas primarias con tipo_red vs clase inconsistente
 
   -- Busca los elementos de un Número de Tramo Específico
   function EAM_TRACETRAMOESPECIFICO(nrTramo IN NUMBER) return EAM_TRACE_TABLE;
@@ -1021,7 +1028,7 @@ create or replace package body EAM_EPM is
                  vSistemasValvulasRedM when 0 then vSistemasValvulasRedRegA end, --vUbicacionEstSeccionamiento,
                  7,
                  elTrace.g3e_fid,
-                 'EVS' || codigo_padre,
+                 'EVS-' || codigo_padre,
                  null,
                  null,
                  null,
@@ -1252,7 +1259,7 @@ create or replace package body EAM_EPM is
         
           insert into eam_activos_temp
           values
-            ('MATRIZ',
+            ('RAMAL',
              vRegionLineaPrimaria,
              vClaseEstacionDerivacion,
              elTrace.g3e_fid,
@@ -1271,7 +1278,7 @@ create or replace package body EAM_EPM is
           -- Linea Primaria, Estación Valvula Derivación, Valvula Derivacion
           insert into eam_activos_temp
           values
-            ('MATRIZ',
+            ('RAMAL',
              vRegionLineaPrimaria,
              vClaseValvulaDerivacion,
              elTrace.g3e_fid,
@@ -1290,7 +1297,7 @@ create or replace package body EAM_EPM is
           --Linea Primaria, Estación Valvula Derivación, Obra Civil Derivacion
           insert into eam_activos_temp
           values
-            ('MATRIZ',
+            ('RAMAL',
              vRegionLineaPrimaria,
              vClaseObraCivilDerivacion,
              elTrace.g3e_fid,
@@ -1444,8 +1451,8 @@ create or replace package body EAM_EPM is
                 vProteccionCatodiaRedRegA
              end,
              7,
-             null,
-             null,
+             elp_proteccion.g3e_fid,
+             'URT-' || elp_proteccion.g3e_fid,
              null,
              0,
              0,
@@ -1463,8 +1470,8 @@ create or replace package body EAM_EPM is
                                  elp_proteccion.g3e_fno) when 1 then
              vProteccionCatodiaRedM when 0 then vProteccionCatodiaRedRegA end,
              7,
-             null,
-             null,
+             elp_proteccion.g3e_fid,
+             'URT-' || elp_proteccion.g3e_fid,
              null,
              0,
              0,
