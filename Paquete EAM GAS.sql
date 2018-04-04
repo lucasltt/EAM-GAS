@@ -49,13 +49,22 @@ create or replace package EAM_EPM is
   -- Created : 15/03/18
   -- 1.   Correcion Nivel Superior Ubicacion
   -- 2.   Nueva columnas tablas de activos
-  
+
   -- Correción
   -- Version : 1.3.3
   -- Author  : Lucas Turchet
   -- Created : 23/03/18
   -- 1.   Correcion Activos de nivel 7  con nivel superior nulo
   -- 2.   Correcion Válvulas primarias con tipo_red vs clase inconsistente
+
+  -- Correción
+  -- Version : 1.3.4
+  -- Author  : Lucas Turchet
+  -- Created : 04/04/18
+  -- 1.   No se insertan más los activos que no tienen valvula padre
+  -- 2.   No se intertan más los tramos con bifurcaciones
+  -- 3.   Los activos de nivel 6 no tiene más el nível superior poblado
+  -- 4.   Correción de la ubicación de activos de circuitos.
 
   -- Busca los elementos de un Número de Tramo Específico
   function EAM_TRACETRAMOESPECIFICO(nrTramo IN NUMBER) return EAM_TRACE_TABLE;
@@ -1047,6 +1056,36 @@ create or replace package body EAM_EPM is
     
     end loop;
   
+    --Mirar si hay activos (tramos agrupados) por error de catastro
+  
+    insert into eam_errors
+      select 'TRAMO',
+             g3e_fid,
+             g3e_fno,
+             sysdate,
+             'Hay bifurcacion en el tramo'
+        from eam_activos_temp
+       where activo in
+             (select distinct activo
+                from eam_activos_temp
+               where (activo, ordem) in
+                     (select a1.activo, a1.ordem
+                        from eam_activos_temp a1
+                       where a1.clase = 'TRAMO' having count(a1.ordem) >= 2
+                       group by a1.activo, a1.ordem));
+    commit;
+  
+    delete from eam_activos_temp
+     where activo in
+           (select distinct activo
+              from eam_activos_temp
+             where (activo, ordem) in
+                   (select a1.activo, a1.ordem
+                      from eam_activos_temp a1
+                     where a1.clase = 'TRAMO' having count(a1.ordem) >= 2
+                     group by a1.activo, a1.ordem));
+    commit;
+  
     --Linea Matriz, Obra Civil
     for clp_lm_oc in lp_lm_oc loop
       insert into eam_activos_temp
@@ -1382,6 +1421,25 @@ create or replace package body EAM_EPM is
   
     --Ramal, Obra Civil
     for clp_rm_oc in lp_rm_oc loop
+    
+      select count(1)
+        into vCount
+        from eam_activos_temp
+       where codigo_activo = 'RAM-' || ora_hash(clp_rm_oc.ramal, 88888888)
+         and clase = vClaseRamal;
+    
+      if vCount = 0 then
+        insert into eam_errors
+        values
+          (clp_rm_oc.ramal,
+           clp_rm_oc.fid_protec,
+           clp_rm_oc.fno_protec,
+           sysdate,
+           'No se encontro el padre del ramal');
+        commit;
+        continue;
+      end if;
+    
       insert into eam_activos_temp
       values
         ('RAMAL',
@@ -1391,12 +1449,8 @@ create or replace package body EAM_EPM is
          clp_rm_oc.fno_protec,
          null,
          case
-          EAM_ESMETROPOLITANA(clp_rm_oc.fid_protec, clp_rm_oc.fno_protec)
-           when 1 then
-            vRamalesRedM
-           when 0 then
-            vRamalesRedRegA
-         end, --vUbicacionRamal,
+         EAM_ESMETROPOLITANA(clp_rm_oc.fid_protec, clp_rm_oc.fno_protec) when 1 then
+         vRamalesRedM when 0 then vRamalesRedRegA end, --vUbicacionRamal,
          7,
          clp_rm_oc.tub_fid,
          'RAM-' || ora_hash(clp_rm_oc.ramal, 88888888),
@@ -1650,11 +1704,10 @@ create or replace package body EAM_EPM is
          circuito.g3e_fid,
          circuito.g3e_fno,
          'ART-' || circuito.codigo,
-         case EAM_ESMETROPOLITANA(circuito.g3e_fid, circuito.g3e_fno) when 1 then
-         vLineaSecundariaRedM when 0 then vLineaSecundariaRedRegA end,
+         'CIR-' || circuito.codigo,
          6,
          circuito.g3e_fid,
-         circuito.codigo,
+         null,
          null,
          0,
          0,
@@ -1674,8 +1727,7 @@ create or replace package body EAM_EPM is
            activo.g3e_fid,
            activo.g3e_fno,
            null,
-           case EAM_ESMETROPOLITANA(activo.g3e_fid, activo.g3e_fno) when 1 then
-           vLineaSecundariaRedM when 0 then vLineaSecundariaRedRegA end,
+           'CIR-' || circuito.codigo,
            7,
            circuito.g3e_fid,
            'ART-' || circuito.codigo,
@@ -1700,8 +1752,7 @@ create or replace package body EAM_EPM is
            activo.g3e_fid,
            activo.g3e_fno,
            null,
-           case EAM_ESMETROPOLITANA(activo.g3e_fid, activo.g3e_fno) when 1 then
-           vLineaSecundariaRedM when 0 then vLineaSecundariaRedRegA end,
+           'CIR-' || circuito.codigo,
            7,
            circuito.g3e_fid,
            'ART-' || circuito.codigo,
@@ -1722,12 +1773,7 @@ create or replace package body EAM_EPM is
            activo.fid_protec,
            activo.fno_protec,
            null,
-           case EAM_ESMETROPOLITANA(activo.fid_protec, activo.fno_protec)
-             when 1 then
-              vLineaSecundariaRedM
-             when 0 then
-              vLineaSecundariaRedRegA
-           end,
+           'CIR-' || circuito.codigo,
            7,
            activo.fid_tuberia,
            'ART-' || circuito.codigo,
@@ -1753,11 +1799,10 @@ create or replace package body EAM_EPM is
            activo.g3e_fid,
            activo.g3e_fno,
            'ANI-' || activo.codigo_valvula,
-           case EAM_ESMETROPOLITANA(activo.g3e_fid, activo.g3e_fno) when 1 then
-           vLineaSecundariaRedM when 0 then vLineaSecundariaRedRegA end,
+           'CIR-' || circuito.codigo,
            6,
            circuito.g3e_fid,
-           circuito.codigo,
+           null,
            null,
            0,
            0,
@@ -1771,8 +1816,7 @@ create or replace package body EAM_EPM is
            activo.g3e_fid,
            activo.g3e_fno,
            null,
-           case EAM_ESMETROPOLITANA(activo.g3e_fid, activo.g3e_fno) when 1 then
-           vLineaSecundariaRedM when 0 then vLineaSecundariaRedRegA end,
+           'CIR-' || circuito.codigo,
            7,
            circuito.g3e_fid,
            'ANI-' || activo.codigo_valvula,
@@ -1784,11 +1828,36 @@ create or replace package body EAM_EPM is
       commit;
     
       --Tuberia Anillo
+    
+      --Tuberias que tienen un codigo_valvula que no pertenence a ninguna valvula
+      insert into eam_errors
+        select substr(circuito.descripcion, 10),
+               g3e_fid,
+               g3e_fno,
+               sysdate,
+               'No se encontro una valvula con el mismo codigo_valvula'
+          from cconectividad_g
+         where g3e_fno = 15000
+           and nombre_circuito = substr(circuito.descripcion, 10)
+           and codigo_valvula not in
+               (select distinct codigo_valvula
+                  from cconectividad_g
+                 where g3e_fno = 15100
+                   and nombre_circuito = substr(circuito.descripcion, 10));
+      commit;
+    
       for activo in (select g3e_fid, g3e_fno, codigo_valvula
                        from cconectividad_g
                       where g3e_fno = 15000
                         and nombre_circuito =
-                            substr(circuito.descripcion, 10)) loop
+                            substr(circuito.descripcion, 10)
+                        and codigo_valvula in
+                            (select distinct codigo_valvula
+                               from cconectividad_g
+                              where g3e_fno = 15100
+                                and nombre_circuito =
+                                    substr(circuito.descripcion, 10))) loop
+      
         insert into eam_activos_temp
         values
           ('CIRCUITO',
@@ -1797,8 +1866,7 @@ create or replace package body EAM_EPM is
            activo.g3e_fid,
            activo.g3e_fno,
            null,
-           case EAM_ESMETROPOLITANA(activo.g3e_fid, activo.g3e_fno) when 1 then
-           vLineaSecundariaRedM when 0 then vLineaSecundariaRedRegA end,
+           'CIR-' || circuito.codigo,
            7,
            circuito.g3e_fid,
            'ANI-' || activo.codigo_valvula,
@@ -1811,6 +1879,25 @@ create or replace package body EAM_EPM is
     
       --Obra Civil Anillo
       for activo in ls_an_oc(substr(circuito.descripcion, 10)) loop
+      
+        select count(1)
+          into vCount
+          from cconectividad_g
+         where codigo_valvula = activo.codigo_valvula
+           and g3e_fid = 15100;
+      
+        if vCount = 0 then
+          insert into eam_errors
+          values
+            (substr(circuito.descripcion, 10),
+             activo.fid_protec,
+             activo.fno_protec,
+             sysdate,
+             'No se encontro una valvula con el mismo codigo_valvula');
+          commit;
+          continue;
+        end if;
+      
         insert into eam_activos_temp
         values
           ('CIRCUITO',
@@ -1819,12 +1906,7 @@ create or replace package body EAM_EPM is
            activo.fid_protec,
            activo.fno_protec,
            null,
-           case EAM_ESMETROPOLITANA(activo.fid_protec, activo.fno_protec)
-             when 1 then
-              vLineaSecundariaRedM
-             when 0 then
-              vLineaSecundariaRedRegA
-           end,
+           'CIR-' || circuito.codigo,
            7,
            activo.fid_tuberia,
            'ANI-' || activo.codigo_valvula,
@@ -2031,7 +2113,6 @@ create or replace package body EAM_EPM is
   
   exception
     when others then
-    
       return 0;
     
   end EAM_ESMETROPOLITANA;
