@@ -65,6 +65,13 @@ create or replace package EAM_EPM is
   -- 2.   No se intertan más los tramos con bifurcaciones
   -- 3.   Los activos de nivel 6 no tiene más el nível superior poblado
   -- 4.   Correción de la ubicación de activos de circuitos.
+  
+  -- Correción
+  -- Version : 1.3.5
+  -- Author  : Lucas Turchet
+  -- Created : 05/04/18
+  -- 1.  Inserción de las valvula de seccionamiento.
+
 
   -- Busca los elementos de un Número de Tramo Específico
   function EAM_TRACETRAMOESPECIFICO(nrTramo IN NUMBER) return EAM_TRACE_TABLE;
@@ -579,6 +586,7 @@ create or replace package body EAM_EPM is
     vClaseCeldaKirk               VARCHAR2(100);
     vClaseEstacionDerivacion      VARCHAR2(100);
     vClaseValvulaDerivacion       VARCHAR2(100);
+    vClaseValvulaSeccionamiento   VARCHAR2(100);
     vClaseObraCivilDerivacion     VARCHAR2(100);
     vRegionLineaPrimaria          VARCHAR2(100);
   
@@ -821,6 +829,10 @@ create or replace package body EAM_EPM is
       into vClaseObraCivilDerivacion
       from eam_config
      where descripcion = 'ClaseObraCivilDerivacion';
+    select valor
+      into vClaseValvulaSeccionamiento
+      from eam_config
+     where descripcion = 'ClaseValvulaSeccionamiento';
   
     select valor
       into vLineaMatrizRedM
@@ -992,6 +1004,25 @@ create or replace package body EAM_EPM is
             ('MATRIZ',
              vRegionLineaPrimaria,
              vClaseObraCivilSeccionamiento,
+             elTrace.g3e_fid,
+             elTrace.g3e_fno,
+             null,
+             case EAM_ESMETROPOLITANA(elTrace.g3e_fid, elTrace.g3e_fno) when 1 then
+             vSistemasValvulasRedM when 0 then vSistemasValvulasRedRegA end, --vUbicacionEstSeccionamiento,
+             7,
+             elTrace.g3e_fid,
+             'EVS-' || codigo,
+             null,
+             null,
+             null,
+             sysdate);
+          commit;
+        
+          insert into eam_activos_temp
+          values
+            ('MATRIZ',
+             vRegionLineaPrimaria,
+             vClaseValvulaSeccionamiento,
              elTrace.g3e_fid,
              elTrace.g3e_fno,
              null,
@@ -1704,7 +1735,7 @@ create or replace package body EAM_EPM is
          circuito.g3e_fid,
          circuito.g3e_fno,
          'ART-' || circuito.codigo,
-         'CIR-' || circuito.codigo,
+         circuito.codigo_ubicacion,
          6,
          circuito.g3e_fid,
          null,
@@ -1727,7 +1758,7 @@ create or replace package body EAM_EPM is
            activo.g3e_fid,
            activo.g3e_fno,
            null,
-           'CIR-' || circuito.codigo,
+           circuito.codigo_ubicacion,
            7,
            circuito.g3e_fid,
            'ART-' || circuito.codigo,
@@ -1752,7 +1783,7 @@ create or replace package body EAM_EPM is
            activo.g3e_fid,
            activo.g3e_fno,
            null,
-           'CIR-' || circuito.codigo,
+           circuito.codigo_ubicacion,
            7,
            circuito.g3e_fid,
            'ART-' || circuito.codigo,
@@ -1773,7 +1804,7 @@ create or replace package body EAM_EPM is
            activo.fid_protec,
            activo.fno_protec,
            null,
-           'CIR-' || circuito.codigo,
+           circuito.codigo_ubicacion,
            7,
            activo.fid_tuberia,
            'ART-' || circuito.codigo,
@@ -1799,7 +1830,7 @@ create or replace package body EAM_EPM is
            activo.g3e_fid,
            activo.g3e_fno,
            'ANI-' || activo.codigo_valvula,
-           'CIR-' || circuito.codigo,
+           circuito.codigo_ubicacion,
            6,
            circuito.g3e_fid,
            null,
@@ -1816,7 +1847,7 @@ create or replace package body EAM_EPM is
            activo.g3e_fid,
            activo.g3e_fno,
            null,
-           'CIR-' || circuito.codigo,
+           circuito.codigo_ubicacion,
            7,
            circuito.g3e_fid,
            'ANI-' || activo.codigo_valvula,
@@ -1842,8 +1873,22 @@ create or replace package body EAM_EPM is
            and codigo_valvula not in
                (select distinct codigo_valvula
                   from cconectividad_g
+                 where g3e_fno = 15100);
+    
+      insert into eam_errors
+        select substr(circuito.descripcion, 10),
+               g3e_fid,
+               g3e_fno,
+               sysdate,
+               'La valvula padre pertence a otro dicruito'
+          from cconectividad_g
+         where g3e_fno = 15000
+           and nombre_circuito = substr(circuito.descripcion, 10)
+           and codigo_valvula in
+               (select distinct codigo_valvula
+                  from cconectividad_g
                  where g3e_fno = 15100
-                   and nombre_circuito = substr(circuito.descripcion, 10));
+                   and nombre_circuito != substr(circuito.descripcion, 10));
       commit;
     
       for activo in (select g3e_fid, g3e_fno, codigo_valvula
@@ -1866,7 +1911,7 @@ create or replace package body EAM_EPM is
            activo.g3e_fid,
            activo.g3e_fno,
            null,
-           'CIR-' || circuito.codigo,
+           circuito.codigo_ubicacion,
            7,
            circuito.g3e_fid,
            'ANI-' || activo.codigo_valvula,
@@ -1884,7 +1929,7 @@ create or replace package body EAM_EPM is
           into vCount
           from cconectividad_g
          where codigo_valvula = activo.codigo_valvula
-           and g3e_fid = 15100;
+           and g3e_fno = 15100;
       
         if vCount = 0 then
           insert into eam_errors
@@ -1906,7 +1951,7 @@ create or replace package body EAM_EPM is
            activo.fid_protec,
            activo.fno_protec,
            null,
-           'CIR-' || circuito.codigo,
+           circuito.codigo_ubicacion,
            7,
            activo.fid_tuberia,
            'ANI-' || activo.codigo_valvula,
@@ -2009,7 +2054,7 @@ create or replace package body EAM_EPM is
                and nuevo.g3e_fno = ea.g3e_fno);
     commit;
   
-    --inserta los registros diferente y nuevos que hay en la tabla eam_activos_temp en la 
+    --inserta los registros diferente y nuevos que hay en la tabla eam_activos_temp en la
     --ter um registro no eam_activo que nao tem no eam_activo_temp
     insert into eam_activos
       (select nuevo.*
@@ -2040,7 +2085,7 @@ create or replace package body EAM_EPM is
                and nuevo.g3e_fno = eu.g3e_fno);
     commit;
   
-    --inserta los registros diferente y nuevos que hay en la tabla eam_activos_temp en la 
+    --inserta los registros diferente y nuevos que hay en la tabla eam_activos_temp en la
     --ter um registro no eam_activo que nao tem no eam_activo_temp
     insert into eam_ubicacion
       (select nuevo.*
@@ -2089,7 +2134,7 @@ create or replace package body EAM_EPM is
     vCount number(2);
   begin
   
-    select municipio
+    select municipio_geo
       into vMunID
       from ccomun
      where g3e_fid = pFID
