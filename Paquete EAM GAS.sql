@@ -65,13 +65,24 @@ create or replace package EAM_EPM is
   -- 2.   No se intertan más los tramos con bifurcaciones
   -- 3.   Los activos de nivel 6 no tiene más el nível superior poblado
   -- 4.   Correción de la ubicación de activos de circuitos.
-  
+
   -- Correción
   -- Version : 1.3.5
   -- Author  : Lucas Turchet
   -- Created : 05/04/18
   -- 1.  Inserción de las valvula de seccionamiento.
 
+  -- Correción
+  -- Version : 1.3.6
+  -- Author  : Lucas Turchet
+  -- Created : 25/04/18
+  -- 1.  Manejo retirados parciales
+  
+  -- Correción
+  -- Version : 1.3.7
+  -- Author  : Lucas Turchet
+  -- Created : 26/04/18
+  -- 1.  Nuevo algoritmo para identificacion de novedades
 
   -- Busca los elementos de un Número de Tramo Específico
   function EAM_TRACETRAMOESPECIFICO(nrTramo IN NUMBER) return EAM_TRACE_TABLE;
@@ -1971,133 +1982,96 @@ create or replace package body EAM_EPM is
     update eam_ubicacion_temp set fecha_act = vFechaEjec;
     commit;
   
-    --Manejo de los Retirados
-    --Unos elementos se insertan sin correr las tablas de coonectividad o pertenencia
-    --y con esso se quedan elementos retirados acá
+    --Manejo de la fecha de actualizacion
+    merge into eam_activos_temp nuevo
+    using eam_activos_all viejo
+    on (viejo.g3e_fid = nuevo.g3e_fid)
+    when matched then
+      update
+         set nuevo.fecha_act = viejo.fecha_act
+       where (nvl(nuevo.codigo_activo, 0) = nvl(viejo.codigo_activo, 0) and
+             nvl(nuevo.ubicacion, 0) = nvl(viejo.ubicacion, 0) and
+             nvl(nuevo.fid_padre, 0) = nvl(viejo.fid_padre, 0) and
+             nvl(nuevo.nivel_superior, 0) = nvl(viejo.nivel_superior, 0))
+         and nuevo.clase = viejo.clase
+         and nuevo.g3e_fno = viejo.g3e_fno;
+    commit;
   
-    delete from eam_activos_temp
-     where g3e_fid in (select ea.g3e_fid
-                         from eam_activos_temp ea
-                        inner join ccomun c
-                           on c.g3e_fid = ea.g3e_fid
-                          and c.g3e_fno = ea.g3e_fno
-                        where c.estado = 'RETIRADO');
+    merge into eam_ubicacion_temp nuevo
+    using eam_ubicacion viejo
+    on (viejo.g3e_fid = nuevo.g3e_fid)
+    when matched then
+      update
+         set nuevo.fecha_act = viejo.fecha_act
+       where (nvl(nuevo.codigo, 0) = nvl(viejo.codigo, 0) and
+             nvl(nuevo.codigo_ubicacion, 0) =
+             nvl(viejo.codigo_ubicacion, 0) and
+             nvl(nuevo.nivel_superior, 0) = nvl(viejo.nivel_superior, 0))
+         and nuevo.clase = viejo.clase
+         and nuevo.g3e_fno = viejo.g3e_fno;
+    commit;
+  
+    commit;
+    delete from eam_ubicacion;
+    commit;
+    insert into eam_ubicacion
+      select * from eam_ubicacion_temp;
     commit;
   
     --Manejo de los retirados
-    --Elementos que estaban en la ejecucion anterior y no estan más en esta ejecución fueron retirados
-    select count(1) into vCount from eam_activos;
-    if vCount > 0 then
-      for cRet in (select ea.g3e_fid
-                     from eam_activos ea
-                    where not exists (select *
-                             from eam_activos_ret
-                            where g3e_fid = ea.g3e_fid)
-                   minus
-                   select eat.g3e_fid
-                     from eam_activos_temp eat) loop
-        for eRet in (select * from eam_activos where g3e_fid = cRet.g3e_fid) loop
-          insert into eam_activos_ret
-          values
-            (eret.tipo_red,
-             eret.nombre_red,
-             eret.clase,
-             eret.g3e_fid,
-             eret.g3e_fno,
-             eret.codigo_activo,
-             eret.ubicacion,
-             eret.nivel,
-             eret.fid_padre,
-             eret.nivel_superior,
-             eret.descripcion,
-             eret.activo,
-             eret.ordem,
-             sysdate);
-        end loop;
-      
-        commit;
-      
-      end loop;
-    
-    end if;
-  
-    delete from eam_activos
-     where g3e_fid in (select g3e_fid from eam_activos_ret);
+    insert into eam_activos_ret
+      select ea.tipo_red,
+             ea.nombre_red,
+             ea.clase,
+             ea.g3e_fid,
+             ea.g3e_fno,
+             ea.codigo_activo,
+             ea.ubicacion,
+             ea.nivel,
+             ea.fid_padre,
+             ea.nivel_superior,
+             ea.descripcion,
+             ea.activo,
+             ea.ordem,
+             vFechaEjec
+        from eam_activos_all ea
+       inner join ccomun c
+          on (c.g3e_fid = ea.g3e_fid and c.g3e_fno = ea.g3e_fno)
+       where c.estado = 'RETIRADO'
+         and not exists (select g3e_fid
+                from eam_activos_ret
+               where g3e_fid = ea.g3e_fid
+                 and g3e_fno = ea.g3e_fno);
     commit;
   
-    --Mantener la fecha de actualizacion
-    --borrar de la tablas eam_activos los registros diferentes y nuevos que hay en la tabla eam_activo_temp
-    --esto se hace para garantizar que la fecha sea actualizada (y los valores diferentes) en en proximo paso
-    delete from eam_activos ea
-     where exists
-     (select nuevo.clase,
-                   nuevo.g3e_fid,
-                   nuevo.g3e_fno,
-                   nuevo.codigo_activo codigo_activo_n,
-                   viejo.codigo_activo codigo_activo_v,
-                   nuevo.ubicacion     ubicacion_n,
-                   viejo.ubicacion     ubicacion_v,
-                   nuevo.fid_padre     fid_padre_n,
-                   viejo.fid_padre     fid_padre_v,
-                   viejo.fecha_act
-              from eam_activos_temp nuevo
-              left join eam_activos viejo
-                on nuevo.clase = viejo.clase
-               and nuevo.g3e_fid = viejo.g3e_fid
-               and nuevo.g3e_fno = viejo.g3e_fno
-             where (nvl(nuevo.codigo_activo, 0) !=
-                   nvl(viejo.codigo_activo, 0) or
-                   nvl(nuevo.ubicacion, 0) != nvl(viejo.ubicacion, 0) or
-                   nvl(nuevo.fid_padre, 0) != nvl(viejo.fid_padre, 0))
-               and nuevo.g3e_fid = ea.g3e_fid
-               and nuevo.clase = ea.clase
-               and nuevo.g3e_fno = ea.g3e_fno);
+    --Actualizar tabla eam_activos_all = elementos en operacion + retirados - returados parciales
+    delete from eam_activos_all;
     commit;
   
-    --inserta los registros diferente y nuevos que hay en la tabla eam_activos_temp en la
-    --ter um registro no eam_activo que nao tem no eam_activo_temp
-    insert into eam_activos
-      (select nuevo.*
-         from eam_activos_temp nuevo
-         left join eam_activos viejo
-           on nuevo.clase = viejo.clase
-          and nuevo.g3e_fid = viejo.g3e_fid
-          and nuevo.g3e_fno = viejo.g3e_fno
-        where (nvl(nuevo.codigo_activo, 0) != nvl(viejo.codigo_activo, 0) or
-              nvl(nuevo.ubicacion, 0) != nvl(viejo.ubicacion, 0) or
-              nvl(nuevo.fid_padre, 0) != nvl(viejo.fid_padre, 0)));
+    -- los que no fueron retirados
+    insert into eam_activos_all
+      select ea.*
+        from eam_activos_temp ea
+       where not exists
+       (select g3e_fid from eam_activos_ret where g3e_fid = ea.g3e_fid);
     commit;
   
-    delete from eam_ubicacion eu
-     where exists (select nuevo.clase, nuevo.g3e_fid, nuevo.g3e_fno
-              from eam_ubicacion_temp nuevo
-              left join eam_ubicacion viejo
-                on nuevo.clase = viejo.clase
-               and nuevo.g3e_fid = viejo.g3e_fid
-               and nuevo.g3e_fno = viejo.g3e_fno
-             where (nvl(nuevo.codigo, 0) != nvl(viejo.codigo, 0) or
-                   nvl(nuevo.codigo_ubicacion, 0) !=
-                   nvl(viejo.codigo_ubicacion, 0) or
-                   nvl(nuevo.nivel_superior, 0) !=
-                   nvl(viejo.nivel_superior, 0))
-               and nuevo.g3e_fid = eu.g3e_fid
-               and nuevo.clase = eu.clase
-               and nuevo.g3e_fno = eu.g3e_fno);
+    -- los que no son retiros lineares agrupados
+    insert into eam_activos_all
+      select * from eam_activos_ret where nvl(activo, 0) = 0;
     commit;
   
-    --inserta los registros diferente y nuevos que hay en la tabla eam_activos_temp en la
-    --ter um registro no eam_activo que nao tem no eam_activo_temp
-    insert into eam_ubicacion
-      (select nuevo.*
-         from eam_ubicacion_temp nuevo
-         left join eam_ubicacion viejo
-           on nuevo.clase = viejo.clase
-          and nuevo.g3e_fid = viejo.g3e_fid
-          and nuevo.g3e_fno = viejo.g3e_fno
-        where (nvl(nuevo.codigo, 0) != nvl(viejo.codigo, 0) or
-              nvl(nuevo.codigo_ubicacion, 0) !=
-              nvl(viejo.codigo_ubicacion, 0) or
-              nvl(nuevo.nivel_superior, 0) != nvl(viejo.nivel_superior, 0)));
+    -- los que son retiros lineares completos
+    insert into eam_activos_all
+      select *
+        from eam_activos_ret
+       where activo not in
+             (select distinct activo
+                from eam_activos_all
+               where activo in (select distinct activo
+                                  from eam_activos_ret
+                                 where nvl(activo, 0) != 0))
+         and nvl(activo, 0) != 0;
     commit;
   
   end EAM_TAXONOMIA;
@@ -2106,14 +2080,16 @@ create or replace package body EAM_EPM is
   begin
     execute immediate 'TRUNCATE TABLE EAM_ACTIVOS_RET';
     execute immediate 'TRUNCATE TABLE EAM_UBICACION';
-    execute immediate 'TRUNCATE TABLE EAM_ACTIVOS';
+    execute immediate 'TRUNCATE TABLE EAM_ACTIVOS_TEMP';
+    execute immediate 'TRUNCATE TABLE EAM_UBICACION_TEMP';
+    execute immediate 'TRUNCATE TABLE EAM_ACTIVOS_ALL';
   end;
 
   procedure EAM_RESPALDAR_TABLAS is
   begin
   
     begin
-      execute immediate 'DROP TABLE EAM_ACTIVOS_BKP';
+      execute immediate 'DROP TABLE EAM_ACTIVOS_TEMP_BKP';
     end;
   
     begin
@@ -2124,8 +2100,13 @@ create or replace package body EAM_EPM is
       execute immediate 'DROP TABLE EAM_UBICACION_BKP';
     end;
   
-    execute immediate 'CREATE TABLE EAM_ACTIVOS_BKP AS SELECT * FROM EAM_ACTIVOS';
+    begin
+      execute immediate 'DROP TABLE EAM_ACTIVOS_ALL_BKP';
+    end;
+  
+    execute immediate 'CREATE TABLE EAM_ACTIVOS_TEMP_BKP AS SELECT * FROM EAM_ACTIVOS_TEMP';
     execute immediate 'CREATE TABLE EAM_ACTIVOS_RET_BKP AS SELECT * FROM EAM_ACTIVOS_RET';
+    execute immediate 'CREATE TABLE EAM_ACTIVOS_ALL_BKP AS SELECT * FROM EAM_ACTIVOS_ALL';
     execute immediate 'CREATE TABLE EAM_UBICACION_BKP AS SELECT * FROM EAM_UBICACION';
   end;
 
